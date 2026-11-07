@@ -1,0 +1,1626 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>로또 6/45 분석기</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#cf2f55">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="로또 분석기">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Do+Hyeon&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: 로또 용지(OMR 슬립) 모티프 — 상단 고정 탭바 + 최대 1120px 본문, 번호판은 실제 용지처럼 7열, 마킹 = 고정수 / X = 제외수 */
+:root{
+  --paper:#f3f4f7; --surface:#ffffff; --surface-2:#eceff4;
+  --ink:#161c29; --ink-2:#444e62; --muted:#737d91; --line:#dbe0e8;
+  --slip:#cf2f55; --slip-ink:#ffffff; --slip-soft:#fbe6ec;
+  --good:#16794b; --good-soft:#e0f3e9; --warn:#a85f00; --warn-soft:#fcefd9; --bad:#b4233f; --bad-soft:#fbe3e8;
+  --bar:#5d6d8f; --bar-hi:#cf2f55; --band:rgba(207,47,85,.09); --grid:#e6e9ef;
+  --b0:#fbc400; --b1:#69c8f2; --b2:#ff7272; --b3:#aaaaaa; --b4:#b0d840;
+  --f-display:"Do Hyeon","Malgun Gothic","Apple SD Gothic Neo",sans-serif;
+  --f-body:"IBM Plex Sans KR","Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif;
+  --f-mono:"IBM Plex Mono",Consolas,"Courier New",monospace;
+  --r:12px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --paper:#0f131b; --surface:#171c27; --surface-2:#202736;
+  --ink:#e8ecf3; --ink-2:#b3bccb; --muted:#8a94a8; --line:#2a3242;
+  --slip:#ff6e8b; --slip-ink:#1b0c12; --slip-soft:#3a1b26;
+  --good:#4cc38a; --good-soft:#12321f; --warn:#e8a541; --warn-soft:#3a2a10; --bad:#ff7d93; --bad-soft:#3d1820;
+  --bar:#8798bd; --bar-hi:#ff6e8b; --band:rgba(255,110,139,.11); --grid:#252c3a;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#0f131b; --surface:#171c27; --surface-2:#202736;
+  --ink:#e8ecf3; --ink-2:#b3bccb; --muted:#8a94a8; --line:#2a3242;
+  --slip:#ff6e8b; --slip-ink:#1b0c12; --slip-soft:#3a1b26;
+  --good:#4cc38a; --good-soft:#12321f; --warn:#e8a541; --warn-soft:#3a2a10; --bad:#ff7d93; --bad-soft:#3d1820;
+  --bar:#8798bd; --bar-hi:#ff6e8b; --band:rgba(255,110,139,.11); --grid:#252c3a;
+  color-scheme:dark}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.6 var(--f-body)}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--surface)}
+h1,h2,h3,h4{margin:0;text-wrap:balance}
+h2{font:400 26px/1.2 var(--f-display);letter-spacing:.01em}
+h3{font-size:16px;font-weight:700;line-height:1.35}
+p{margin:0}
+a{color:var(--slip);text-underline-offset:2px}
+button{font:inherit;color:inherit;cursor:pointer}
+input,select{font:inherit;font-size:14px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 10px;min-width:0}
+input[type=number]{font-family:var(--f-mono);width:4.6em}
+input[type=checkbox]{accent-color:var(--slip);width:16px;height:16px;margin:0}
+:focus-visible{outline:2px solid var(--slip);outline-offset:2px}
+.num,td.n,.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+
+/* header */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--surface);border-bottom:1px solid var(--line)}
+.top-in{max-width:1120px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px 0}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}
+.brand-mark{flex:none;font:400 17px/1 var(--f-display);background:var(--slip);color:var(--slip-ink);border-radius:8px;padding:9px 9px 8px;letter-spacing:.02em}
+.brand h1{font:400 23px/1.1 var(--f-display)}
+.brand p{font-size:12px;color:var(--muted);margin-top:3px}
+.tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;margin-top:8px}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{flex:none;border:0;background:none;padding:9px 12px 10px;font-size:14px;font-weight:600;color:var(--ink-2);border-bottom:3px solid transparent;border-radius:0}
+.tabs button:hover{color:var(--ink)}
+.tabs button[aria-selected="true"]{color:var(--slip);border-bottom-color:var(--slip)}
+
+.wrap{max-width:1120px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:22px 56px}
+.tab{display:grid;grid-template-columns:minmax(0,1fr);gap:18px}
+.tab[hidden]{display:none}
+.sec-head{display:flex;flex-wrap:wrap;align-items:end;justify-content:space-between;gap:8px 16px}
+.sec-head p{color:var(--muted);font-size:13.5px;max-width:62ch}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;min-width:0;display:grid;grid-template-columns:minmax(0,1fr);gap:12px;align-content:start}
+.card > header{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 12px}
+.card > header p,.hint{font-size:13px;color:var(--muted)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px}
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+
+/* balls */
+.ball{--bs:34px;display:inline-grid;place-items:center;flex:none;width:var(--bs);height:var(--bs);border-radius:50%;font:600 calc(var(--bs)*.42)/1 var(--f-mono);color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.45);background:radial-gradient(circle at 34% 28%,rgba(255,255,255,.55),rgba(255,255,255,0) 46%),var(--bc);box-shadow:inset 0 -2px 4px rgba(0,0,0,.16)}
+.ball.sm{--bs:26px}.ball.xs{--bs:22px}.ball.lg{--bs:48px}
+.g0{--bc:var(--b0)}.g1{--bc:var(--b1)}.g2{--bc:var(--b2)}.g3{--bc:var(--b3)}.g4{--bc:var(--b4)}
+.ball.dim{opacity:.28}
+.ball.ring{outline:2.5px solid var(--ink);outline-offset:2px}
+.ball.strike{position:relative}
+.ball.strike::after{content:"";position:absolute;inset:45% -3px auto;height:2.5px;background:var(--ink);transform:rotate(-35deg)}
+.balls{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.plus{color:var(--muted);font-weight:700;padding:0 2px}
+
+/* chips & buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:7px 12px;font-size:14px;font-weight:600;white-space:nowrap}
+.btn:hover{border-color:var(--ink-2)}
+.btn.primary{background:var(--slip);border-color:var(--slip);color:var(--slip-ink)}
+.btn.primary:hover{filter:brightness(1.06)}
+.btn.small{padding:4px 9px;font-size:12.5px;border-radius:7px}
+.btn:disabled{opacity:.5;cursor:default}
+.seg{display:inline-flex;background:var(--surface-2);border-radius:9px;padding:3px;gap:2px;flex-wrap:wrap}
+.seg button{border:0;background:none;border-radius:7px;padding:6px 12px;font-size:13.5px;font-weight:600;color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:6px;background:var(--surface-2);border-radius:999px;padding:3px 10px;font-size:12.5px;color:var(--ink-2);white-space:nowrap}
+.chip b{color:var(--ink);font-family:var(--f-mono);font-weight:600}
+.pill{display:inline-block;border-radius:999px;padding:1px 9px;font-size:12px;font-weight:700}
+.pill.good{background:var(--good-soft);color:var(--good)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.bad{background:var(--bad-soft);color:var(--bad)}
+.pill.neutral{background:var(--surface-2);color:var(--ink-2)}
+.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px}
+.toolbar label{display:inline-flex;align-items:center;gap:6px;font-size:13.5px;color:var(--ink-2)}
+
+/* home */
+.hero{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:18px}
+.hero-main{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:20px;display:grid;gap:16px}
+.round-title{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px}
+.round-title strong{font:400 40px/1 var(--f-display);color:var(--slip)}
+.round-title span{color:var(--muted);font-size:14px}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px 16px;margin:0}
+.kv div{display:grid;gap:1px}
+.kv dt{font-size:12px;color:var(--muted)}
+.kv dd{margin:0;font-weight:700;font-size:15px}
+.next{background:var(--ink);color:var(--paper);border-radius:var(--r);padding:20px;display:grid;gap:10px;align-content:start}
+.next .eyebrow{font-size:12px;letter-spacing:.08em;opacity:.7}
+.next strong{font:400 30px/1.1 var(--f-display)}
+.next p{font-size:13.5px;opacity:.85}
+.next .btn{justify-self:start;background:var(--slip);border-color:var(--slip);color:var(--slip-ink)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;display:grid;gap:4px;align-content:start}
+.tile .lbl{font-size:12px;color:var(--muted)}
+.tile .val{display:flex;align-items:center;gap:8px;font:400 24px/1.15 var(--f-display)}
+.tile .sub{font-size:12.5px;color:var(--ink-2)}
+.recent{display:grid}
+.recent-row{display:grid;grid-template-columns:5.2em minmax(0,1fr) auto;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line)}
+.recent-row:first-child{border-top:0}
+.recent-row .r{font-weight:700}
+.recent-row .r small{display:block;font-weight:400;color:var(--muted);font-size:11.5px}
+.recent-row .w{font-size:12.5px;color:var(--ink-2);text-align:right}
+.note{font-size:12.5px;color:var(--muted);line-height:1.55}
+.callout{border-left:3px solid var(--warn);background:var(--warn-soft);border-radius:8px;padding:10px 14px;font-size:13.5px;color:var(--ink)}
+
+/* tables */
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+.tbl{border-collapse:collapse;width:100%;font-size:13.5px}
+.tbl th{position:sticky;top:0;background:var(--surface-2);text-align:left;font-size:12px;color:var(--ink-2);font-weight:600;padding:8px 10px;white-space:nowrap}
+.tbl td{padding:7px 10px;border-top:1px solid var(--line);white-space:nowrap;vertical-align:middle}
+.tbl td.n,.tbl th.n{text-align:right}
+.tbl tr:hover td{background:color-mix(in srgb,var(--surface-2) 55%,transparent)}
+.pager{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.pager span{font-size:13px;color:var(--muted);padding:0 6px}
+
+/* charts (HTML bars) */
+.chart{display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-rows:var(--h,170px) auto;column-gap:6px}
+.yaxis{position:relative;width:2.6em;font:500 10.5px/1 var(--f-mono);color:var(--muted)}
+.yaxis span{position:absolute;right:0;transform:translateY(50%)}
+.plot{position:relative;border-bottom:1px solid var(--muted)}
+.gl{position:absolute;left:0;right:0;border-top:1px solid var(--grid)}
+.meanline{position:absolute;left:0;right:0;border-top:1.5px dashed var(--ink-2);z-index:2;pointer-events:none}
+.meanline span{position:absolute;right:0;bottom:2px;font-size:10.5px;color:var(--ink-2);background:var(--surface);padding:0 3px;border-radius:3px}
+.cols{position:absolute;inset:0;display:grid;align-items:end;gap:2px}
+.col{position:relative;height:100%;display:flex;align-items:flex-end;cursor:default}
+.col.inband{background:var(--band)}
+.col:hover .bar{filter:brightness(1.18)}
+.bar{width:100%;background:var(--bar);border-radius:4px 4px 0 0;min-height:1px}
+.bar.hi{background:var(--bar-hi)}
+.col .vl{position:absolute;left:50%;transform:translateX(-50%);font:600 10.5px/1 var(--f-mono);color:var(--ink-2);white-space:nowrap;pointer-events:none}
+.xaxis{grid-column:2;display:grid;gap:2px;font:500 10.5px/1 var(--f-mono);color:var(--muted);padding-top:5px;text-align:center}
+.xaxis span{overflow:visible;white-space:nowrap}
+.xaxis span.mk{color:var(--slip);font-weight:700}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--ink-2)}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-1px;margin-right:5px}
+.hbar{display:grid;grid-template-columns:5.5em minmax(0,1fr) 4.2em;align-items:center;gap:8px;font-size:13px}
+.hbar .track{position:relative;height:14px;background:var(--surface-2);border-radius:4px}
+.hbar .fill{position:absolute;inset:0 auto 0 0;background:var(--bar);border-radius:4px}
+.hbar .exp{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink)}
+.hbar .v{text-align:right;font-family:var(--f-mono)}
+
+/* number ranks */
+.rank{display:grid;gap:6px}
+.rank-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px;font-size:13px}
+.rank-row .track{height:8px;background:var(--surface-2);border-radius:4px;overflow:hidden}
+.rank-row .track i{display:block;height:100%;background:var(--bar);border-radius:4px}
+.rank-row .v{font-family:var(--f-mono);color:var(--ink-2);min-width:5.5em;text-align:right}
+
+/* generator */
+.gen{display:grid;grid-template-columns:minmax(0,400px) minmax(0,1fr);gap:18px;align-items:start}
+.board{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;padding:12px;border:1.5px solid var(--slip);border-radius:10px;background:var(--surface)}
+.cell{aspect-ratio:1/1.12;display:grid;place-items:center;border:1.5px solid var(--slip);border-radius:7px;background:var(--surface);color:var(--slip);font:600 15px/1 var(--f-mono);padding:0;position:relative}
+.cell:hover{background:var(--slip-soft)}
+.cell.fix{background:var(--slip);color:var(--slip-ink)}
+.cell.excl{border-color:var(--line);color:var(--muted);background:var(--surface-2)}
+.cell.excl::before,.cell.excl::after{content:"";position:absolute;left:18%;right:18%;top:50%;height:2px;background:var(--muted);transform:rotate(45deg)}
+.cell.excl::after{transform:rotate(-45deg)}
+.picked{display:grid;gap:8px;font-size:13.5px}
+.picked-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.picked-row .lbl{font-weight:700;min-width:5.4em}
+.empty{color:var(--muted);font-size:13px}
+.helper{display:grid;gap:6px;padding-top:10px;border-top:1px solid var(--line)}
+.helper:first-of-type{border-top:0;padding-top:0}
+.helper header{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:4px 8px}
+.helper h4{font-size:13.5px}
+.helper p{font-size:12px;color:var(--muted)}
+.numchip{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:2px 8px 2px 2px;font-size:11.5px;color:var(--ink-2)}
+.numchip:hover{border-color:var(--ink-2)}
+.numchip.on-fix{border-color:var(--slip);background:var(--slip-soft)}
+.numchip.on-excl{opacity:.5;text-decoration:line-through}
+.frows{display:grid}
+.frow{display:grid;grid-template-columns:minmax(0,1.3fr) auto minmax(0,1fr);align-items:center;gap:6px 12px;padding:8px 0;border-top:1px solid var(--line)}
+.frow:first-child{border-top:0}
+.frow.off .frange,.frow.off .fpass{opacity:.4}
+.fname{display:flex;align-items:flex-start;gap:8px;min-width:0}
+.fname input{margin-top:3px}
+.fname span{font-weight:600;font-size:14px;line-height:1.3}
+.fname small{display:block;font-weight:400;font-size:11.5px;color:var(--muted);line-height:1.35;margin-top:2px}
+.frange{display:flex;align-items:center;gap:4px;font-size:13px;color:var(--muted)}
+.frange input{width:4.2em;padding:5px 6px;text-align:center}
+.fpass{display:grid;grid-template-columns:minmax(0,1fr) 3.6em;align-items:center;gap:8px;font:600 12.5px/1 var(--f-mono)}
+.meter{height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden}
+.meter i{display:block;height:100%;background:var(--good);border-radius:3px}
+.combined{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:12px;border-radius:10px;background:var(--surface-2);font-size:13.5px}
+.combined strong{font:400 22px/1 var(--f-display)}
+.progress{height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden}
+.progress i{display:block;height:100%;width:0;background:var(--slip);transition:width .1s}
+.results{display:grid}
+.res-row{display:grid;grid-template-columns:2em minmax(0,1fr) auto;align-items:center;gap:8px 12px;padding:10px 0;border-top:1px solid var(--line)}
+.res-row:first-child{border-top:0}
+.res-row .idx{font:600 12px/1 var(--f-mono);color:var(--muted)}
+.res-row .meta{grid-column:2/3;display:flex;flex-wrap:wrap;gap:4px}
+.res-row .acts{grid-row:1/3;grid-column:3;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.res-head{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;font-size:13.5px;color:var(--ink-2)}
+.res-head b{color:var(--ink);font-family:var(--f-mono)}
+.res-row.top5 .idx{color:var(--slip)}
+.p5{display:grid;gap:12px;margin-top:6px;padding:14px;border:1.5px solid var(--slip);border-radius:var(--r);background:color-mix(in srgb,var(--slip-soft) 45%,var(--surface))}
+.p5 > header{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:4px 12px}
+.p5 h3{font:400 21px/1.2 var(--f-display);color:var(--slip)}
+.p5-row{display:grid;grid-template-columns:3.2em minmax(0,1fr) auto;gap:6px 12px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.p5-row:first-of-type{border-top:0}
+.p5-rank{font:400 20px/1 var(--f-display);color:var(--slip)}
+.p5-rank small{display:block;font:600 11px/1.3 var(--f-mono);color:var(--muted);margin-top:3px}
+.p5-score{display:flex;flex-wrap:wrap;gap:4px}
+.p5-why{grid-column:2/-1;display:grid;gap:2px;font-size:12.5px;line-height:1.45}
+.p5-why .plus-n{color:var(--good)}
+.p5-why .minus-n{color:var(--warn)}
+.p5-total{font:400 22px/1 var(--f-display);text-align:right}
+.p5-total small{display:block;font:500 11px/1.3 var(--f-body);color:var(--muted)}
+
+/* verify & check */
+.inrow{display:grid;grid-template-columns:5em minmax(0,1fr);align-items:center;gap:8px}
+.inrow input{width:100%}
+.stat-line{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;font-size:14px}
+.bigstat{font:400 28px/1 var(--f-display)}
+.numin{display:flex;flex-wrap:wrap;gap:6px}
+.numin input{width:3.4em;text-align:center;font-size:16px;padding:8px 4px}
+.saved-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.saved-row:first-child{border-top:0}
+.saved-row .meta{font-size:12px;color:var(--muted)}
+.rank-tiles{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+.rank-tiles div{background:var(--surface-2);border-radius:10px;padding:10px;display:grid;gap:2px;text-align:center}
+.rank-tiles b{font:400 26px/1 var(--f-display)}
+.rank-tiles span{font-size:12px;color:var(--muted)}
+.rank-tiles small{font-size:11px;color:var(--muted)}
+.rank-tiles .hit{background:var(--slip-soft)}
+.rank-tiles .hit b{color:var(--slip)}
+
+/* guide */
+.prose{display:grid;gap:10px;max-width:72ch;font-size:14.5px}
+.prose ul,.prose ol{margin:0;padding-left:1.3em;display:grid;gap:5px}
+.prose b{font-weight:700}
+.src a{word-break:break-all}
+
+.tip{position:fixed;z-index:50;pointer-events:none;background:var(--ink);color:var(--paper);font-size:12.5px;line-height:1.45;padding:7px 10px;border-radius:8px;white-space:pre-line;max-width:260px;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:60;background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:10px;font-size:14px;box-shadow:0 6px 20px rgba(0,0,0,.25);max-width:calc(100% - 32px)}
+/* chat */
+.chat-fab{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:40;border:0;border-radius:999px;padding:12px 18px;background:var(--slip);color:var(--slip-ink);font-weight:700;font-size:14.5px;box-shadow:0 6px 18px rgba(0,0,0,.22)}
+.chat-fab[aria-expanded="true"]{display:none}
+.chat{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:45;width:min(420px,calc(100vw - 32px));height:min(640px,calc(100dvh - 96px));display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.25);overflow:hidden}
+.chat-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line);background:var(--surface-2)}
+.chat-head h3{font:400 19px/1.2 var(--f-display);color:var(--slip)}
+.chat-head p{font-size:12px;color:var(--muted);margin-top:2px}
+.chat-log{flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:10px;overscroll-behavior:contain}
+.msg{flex:none;max-width:92%;padding:8px 12px;border-radius:12px;font-size:14px;line-height:1.55;white-space:pre-wrap;word-break:break-word}
+.msg.me{align-self:flex-end;background:var(--slip);color:var(--slip-ink);border-bottom-right-radius:4px}
+.msg.bot{align-self:flex-start;background:var(--surface-2);border-bottom-left-radius:4px}
+.msg.sys{align-self:stretch;max-width:none;background:none;border:1px dashed var(--line);font-size:12.5px;color:var(--ink-2)}
+.msg.thinking{color:var(--muted)}
+.msg.res{align-self:stretch;max-width:none;background:var(--surface);border:1px solid var(--line);white-space:normal;display:grid;gap:6px}
+.msg.res h4{font-size:13px}
+.msg.res .r{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-height:34px;padding:2px 0}
+.msg.res .r b{font:600 12px/1 var(--f-mono);color:var(--muted);min-width:2.6em}
+.msg.res .r.top b{color:var(--slip)}
+.msg.res .acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px}
+.chat-ex{display:flex;gap:6px;overflow-x:auto;padding:8px 14px 0;scrollbar-width:none}
+.chat-ex::-webkit-scrollbar{display:none}
+.chat-ex button{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:4px 10px;font-size:12.5px;color:var(--ink-2)}
+.chat-ex button:hover{border-color:var(--ink-2)}
+.chat-form{display:flex;gap:8px;align-items:flex-end;padding:10px 14px 12px}
+.chat-form textarea{flex:1;resize:none;font:inherit;font-size:14.5px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-width:0}
+@media (max-width:560px){
+  .chat{right:0;left:0;bottom:0;width:100%;height:min(78dvh,620px);border-radius:16px 16px 0 0;padding-bottom:env(safe-area-inset-bottom,0px)}
+}
+.fatal{max-width:640px;margin:60px auto;padding:20px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);display:grid;gap:10px}
+
+@media (max-width:860px){
+  .hero{grid-template-columns:1fr}
+  .gen{grid-template-columns:1fr}
+  .board{max-width:440px}
+}
+@media (max-width:560px){
+  h2{font-size:23px}
+  .round-title strong{font-size:34px}
+  .ball.lg{--bs:40px}
+  .frow{grid-template-columns:minmax(0,1fr) auto}
+  .fpass{grid-column:1/-1;padding-left:24px}
+  .recent-row{grid-template-columns:4.4em minmax(0,1fr)}
+  .recent-row .w{grid-column:2;text-align:left}
+  .res-row{grid-template-columns:1.6em minmax(0,1fr)}
+  .res-row .acts{grid-row:auto;grid-column:2;justify-content:flex-start}
+  .rank-tiles{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .ball{--bs:30px}.ball.sm{--bs:24px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<header class="top">
+  <div class="top-in">
+    <div class="brand">
+      <span class="brand-mark">6/45</span>
+      <div><h1>로또 6/45 분석기</h1><p id="dataInfo">데이터 불러오는 중…</p></div>
+    </div>
+    <nav class="tabs" id="tabs" role="tablist" aria-label="메뉴">
+      <button role="tab" data-tab="home">홈</button>
+      <button role="tab" data-tab="history">역대 당첨번호</button>
+      <button role="tab" data-tab="stats">번호 통계</button>
+      <button role="tab" data-tab="patterns">패턴 분포</button>
+      <button role="tab" data-tab="generator">번호 생성기</button>
+      <button role="tab" data-tab="verify">고정·제외수 검증</button>
+      <button role="tab" data-tab="check">내 번호 조회</button>
+      <button role="tab" data-tab="guide">분석 가이드</button>
+    </nav>
+  </div>
+</header>
+
+<div class="fatal" id="fatal" hidden>
+  <h2>당첨번호 데이터가 없습니다</h2>
+  <p>같은 폴더의 <b>data/lotto_data.js</b> 파일을 찾지 못했습니다. 폴더 안의 <b>데이터업데이트.bat</b>을 더블클릭해 1회차부터 최신 회차까지 받은 뒤 이 페이지를 새로고침하세요.</p>
+</div>
+
+<main class="wrap" id="app">
+
+<!-- 홈 -->
+<section class="tab" id="tab-home" hidden>
+  <div class="hero">
+    <div class="hero-main">
+      <div class="round-title"><strong id="hRound"></strong><span id="hDate"></span></div>
+      <div class="balls" id="hBalls"></div>
+      <dl class="kv" id="hPrize"></dl>
+    </div>
+    <aside class="next">
+      <span class="eyebrow">다음 추첨</span>
+      <strong id="nRound"></strong>
+      <p id="nDate"></p>
+      <p>고정수·제외수를 정하고 조건 필터로 조합을 만들어 보세요.</p>
+      <button class="btn" data-goto="generator">번호 생성기 열기</button>
+    </aside>
+  </div>
+  <div class="card">
+    <header><h3>이번 회차 조합 특성</h3><p>역대 1등 조합 중 같은 값이 나온 비율을 함께 표시합니다.</p></header>
+    <div class="chips" id="hTraits"></div>
+  </div>
+  <div class="tiles" id="hTiles"></div>
+  <div class="card">
+    <header><h3>최근 10회 당첨번호</h3><button class="btn small" data-goto="history">전체 보기</button></header>
+    <div class="recent" id="hRecent"></div>
+  </div>
+  <p class="callout">로또는 매 회차 독립적인 무작위 추첨입니다. 어떤 조합이든 1등 확률은 <b>8,145,060분의 1</b>로 같습니다. 이 프로그램의 통계와 필터는 번호를 고르는 기준을 정리해 주는 도구이며 당첨 확률을 높여 주지 않습니다.</p>
+</section>
+
+<!-- 역대 당첨번호 -->
+<section class="tab" id="tab-history" hidden>
+  <div class="sec-head"><h2>역대 1등 당첨번호</h2><p id="hsSummary"></p></div>
+  <div class="toolbar">
+    <label>회차 <input type="number" id="hsRound" min="1" placeholder="전체"></label>
+    <label>포함 번호 <input id="hsNums" placeholder="예: 7 13" style="width:9em"></label>
+    <label>연도 <select id="hsYear"><option value="">전체</option></select></label>
+    <label>정렬 <select id="hsSort"><option value="desc">최신순</option><option value="asc">과거순</option><option value="w1a">1등 당첨금 큰 순</option><option value="w1c">1등 당첨자 많은 순</option></select></label>
+    <button class="btn small" id="hsReset">초기화</button>
+    <span class="hint" id="hsCount"></span>
+  </div>
+  <div class="tablewrap">
+    <table class="tbl">
+      <thead><tr><th>회차</th><th>추첨일</th><th>당첨번호</th><th>보너스</th><th class="n">합계</th><th>홀:짝</th><th>저:고</th><th class="n">AC</th><th class="n">1등</th><th class="n">1등 1인당</th><th>자동·수동·반자동</th></tr></thead>
+      <tbody id="hsBody"></tbody>
+    </table>
+  </div>
+  <div class="pager" id="hsPager"></div>
+</section>
+
+<!-- 번호 통계 -->
+<section class="tab" id="tab-stats" hidden>
+  <div class="sec-head"><h2>번호 통계</h2><p>번호별 출현 횟수, 장기 미출현 번호, 번호대 비율, 궁합수를 기간별로 봅니다.</p></div>
+  <div class="toolbar">
+    <div class="seg" id="stPeriod" role="group" aria-label="기간"></div>
+    <label><input type="checkbox" id="stBonus"> 보너스 번호 포함</label>
+  </div>
+  <div class="card">
+    <header><h3 id="stFreqTitle">번호별 출현 횟수</h3><p>빨간 막대 = 상위 6개 · 점선 = 평균. 막대에 마우스를 올리면 자세히 나옵니다.</p></header>
+    <div id="stFreq"></div>
+  </div>
+  <div class="grid2">
+    <div class="card"><header><h3>많이 나온 번호 (핫넘버)</h3></header><div class="rank" id="stHot"></div></div>
+    <div class="card"><header><h3>적게 나온 번호 (콜드넘버)</h3></header><div class="rank" id="stCold"></div></div>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <header><h3>장기 미출현 번호</h3><p>최신 회차 기준, 전체 기간</p></header>
+      <div class="tablewrap"><table class="tbl"><thead><tr><th>번호</th><th class="n">미출현</th><th class="n">마지막 출현</th><th class="n">평균 간격</th></tr></thead><tbody id="stGap"></tbody></table></div>
+    </div>
+    <div class="card">
+      <header><h3>번호대(공 색상)별 출현 비율</h3><p>검은 선 = 무작위일 때 기대 비율</p></header>
+      <div class="rank" id="stGroup"></div>
+      <div class="note" id="stOddLow"></div>
+    </div>
+  </div>
+  <div class="card">
+    <header><h3>궁합수 (함께 자주 나온 번호)</h3>
+      <label class="hint">기준 번호 <select id="stPairSel"></select></label></header>
+    <div class="rank" id="stPairs"></div>
+  </div>
+  <details class="card">
+    <summary><b>전체 번호표 (1~45)</b> <span class="hint">표로 보기</span></summary>
+    <div class="tablewrap"><table class="tbl"><thead><tr><th>번호</th><th class="n">출현(선택 기간)</th><th class="n">비율</th><th class="n">최근 10회</th><th class="n">전체 출현</th><th class="n">미출현</th></tr></thead><tbody id="stTable"></tbody></table></div>
+  </details>
+</section>
+
+<!-- 패턴 분포 -->
+<section class="tab" id="tab-patterns" hidden>
+  <div class="sec-head"><h2>당첨 조합 패턴 분포</h2><p>역대 1등 조합의 합계·홀짝·AC값 등이 어떻게 분포했는지 봅니다. 분홍 배경은 번호 생성기에 지금 설정된 조건 범위, 빨간 막대는 최신 회차 값입니다.</p></div>
+  <div class="toolbar"><div class="seg" id="ptPeriod" role="group" aria-label="기간"></div></div>
+  <div class="grid3" id="ptGrid"></div>
+</section>
+
+<!-- 번호 생성기 -->
+<section class="tab" id="tab-generator" hidden>
+  <div class="sec-head"><h2 id="genTitle">번호 생성기</h2><p>고정수는 반드시 넣을 번호(최대 5개), 제외수는 빼고 뽑을 번호입니다. 조건을 모두 통과하는 조합 전체를 계산한 뒤 그중에서 무작위로 골라 줍니다.</p></div>
+  <div class="gen">
+    <div style="display:grid;gap:18px;min-width:0">
+      <div class="card">
+        <header>
+          <div class="seg" id="modeSeg" role="group" aria-label="선택 모드">
+            <button data-mode="fix" aria-pressed="true">고정수 지정</button>
+            <button data-mode="excl" aria-pressed="false">제외수 지정</button>
+          </div>
+          <button class="btn small" id="clearAll">모두 비우기</button>
+        </header>
+        <div class="board" id="board"></div>
+        <div class="picked" id="picked"></div>
+      </div>
+      <div class="card">
+        <header><h3>후보 번호 빠르게 넣기</h3></header>
+        <p class="hint" id="helperHint"></p>
+        <div id="helpers" style="display:grid;gap:12px"></div>
+      </div>
+    </div>
+    <div style="display:grid;gap:18px;min-width:0">
+      <div class="card">
+        <header><h3>조합 조건 (필터)</h3>
+          <div class="toolbar"><button class="btn small" id="fDefault">분석 사이트 추천값</button><button class="btn small" id="fNone">모두 끄기</button></div></header>
+        <p class="hint">오른쪽 막대는 그 조건을 역대 1등 조합 몇 %가 통과했는지입니다. 이월수·이웃수는 최신 회차 번호를 기준으로 합니다.</p>
+        <div class="frows" id="frows"></div>
+        <label class="toolbar" style="font-size:13.5px"><input type="checkbox" id="fPast"> 역대 1등 조합과 똑같은 조합 제외 <span class="hint">(1등 조합이 그대로 다시 나온 적은 한 번도 없음)</span></label>
+        <div class="combined" id="combined"></div>
+      </div>
+      <div class="card">
+        <header><h3>조합 만들기</h3></header>
+        <div class="toolbar">
+          <label>방식 <select id="gWeight">
+            <option value="uniform">균등 무작위</option>
+            <option value="hot">최근 50회 핫넘버 가중</option>
+            <option value="cold">최근 50회 콜드넘버 가중</option>
+          </select></label>
+          <label>개수 <select id="gCount"><option>5</option><option>10</option><option>20</option><option>50</option></select></label>
+          <button class="btn primary" id="gRun">번호 생성</button>
+        </div>
+        <div class="progress" id="gProg" hidden><i></i></div>
+        <div id="gOut"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 고정·제외수 검증 -->
+<section class="tab" id="tab-verify" hidden>
+  <div class="sec-head"><h2>고정수·제외수 검증</h2><p>유튜브나 커뮤니티에서 본 이번 주 고정수·제외수를 입력하면 실제 회차 결과와 비교하고, 같은 방법이 과거에 얼마나 맞았는지 확인할 수 있습니다.</p></div>
+  <div class="card">
+    <header><h3>검증할 번호</h3><p>번호 생성기의 번호판과 연결되어 있습니다.</p></header>
+    <div class="inrow"><label for="vFix"><b>고정수</b></label><input id="vFix" placeholder="예: 7 13 33 (최대 5개)"></div>
+    <div class="inrow"><label for="vExcl"><b>제외수</b></label><input id="vExcl" placeholder="예: 1 4 9 21 40"></div>
+  </div>
+  <div class="card">
+    <header><h3>회차별 적중 확인</h3>
+      <div class="toolbar"><button class="btn small" id="vPrev" aria-label="이전 회차">◀</button><input type="number" id="vRound" min="1"><button class="btn small" id="vNext" aria-label="다음 회차">▶</button><button class="btn small" id="vLatest">최신</button></div></header>
+    <div id="vRoundOut"></div>
+  </div>
+  <div class="card">
+    <header><h3>이 번호들을 매 회차 똑같이 썼다면 (전체 회차 백테스트)</h3></header>
+    <div id="vBack"></div>
+  </div>
+  <div class="card">
+    <header><h3>자주 쓰는 선정법, 실제로 맞았을까?</h3><p>각 회차마다 그 이전 데이터만으로 고정수·제외수를 정했다고 가정하고 51회부터 최신 회차까지 검증했습니다.</p></header>
+    <div id="vStrat"></div>
+  </div>
+</section>
+
+<!-- 내 번호 조회 -->
+<section class="tab" id="tab-check" hidden>
+  <div class="sec-head"><h2>내 번호 조회</h2><p>6개 번호를 넣으면 1회부터 지금까지 매주 그 번호로 샀을 때의 당첨 이력을 보여 줍니다.</p></div>
+  <div class="card">
+    <header><h3>번호 입력</h3><p>한 칸에 하나씩, 또는 첫 칸에 "3 11 19 27 34 42"처럼 붙여넣기</p></header>
+    <div class="numin" id="ckIn"></div>
+    <div class="toolbar"><button class="btn primary" id="ckRun">조회</button><button class="btn" id="ckSave">내 번호에 저장</button><button class="btn" id="ckRand">무작위 번호</button></div>
+  </div>
+  <div id="ckOut"></div>
+  <div class="card">
+    <header><h3 id="svTitle">저장한 번호</h3><button class="btn small" id="svClear">전체 삭제</button></header>
+    <div id="svList"></div>
+  </div>
+</section>
+
+<!-- 분석 가이드 -->
+<section class="tab" id="tab-guide" hidden>
+  <div class="sec-head"><h2>분석 가이드</h2><p>유튜브 로또 분석 채널, 통계 사이트, 커뮤니티에서 쓰는 분석 기법을 조사해 정리했습니다.</p></div>
+  <div class="card prose">
+    <h3>먼저 알아둘 것</h3>
+    <ul>
+      <li>6/45 로또의 조합 수는 8,145,060개이고, 매 회차 추첨은 이전 결과와 무관합니다. 1등 확률은 어떤 조합이든 똑같습니다.</li>
+      <li>합계·홀짝·AC값 같은 필터는 "역대 1등 조합에 흔했던 모양"을 고르는 것입니다. 흔한 모양에는 원래 조합 수가 많아서 자주 나올 뿐이며, 그 안의 개별 조합 확률이 높아지지는 않습니다.</li>
+      <li>그래서 이 프로그램은 조건마다 <b>역대 1등 조합 통과율</b>을 보여 줍니다. 조건을 많이 걸수록 실제 1등 조합도 많이 걸러진다는 점을 확인하면서 쓰세요.</li>
+      <li>실제로 의미 있는 전략은 하나입니다. 1등을 했을 때 <b>나눠 갖는 사람을 줄이는 것</b>. 생일(1~31)만 고르거나, 용지에 대각선·세로줄로 마킹하거나, 직전 회차 번호를 그대로 쓰는 조합은 많은 사람이 고르기 때문에 당첨돼도 금액이 작아집니다. <span id="gdShared"></span></li>
+    </ul>
+  </div>
+  <div class="card">
+    <header><h3>분석 항목과 권장 구간 비교</h3><p>두 분석 사이트가 제시한 기준과 이 프로그램의 기본값, 그리고 실제 역대 1등 조합 통과율입니다.</p></header>
+    <div class="tablewrap"><table class="tbl"><thead><tr><th>항목</th><th>뜻</th><th>로또타파 기준</th><th>로또북 기준</th><th>기본값</th><th class="n">역대 통과율</th></tr></thead><tbody id="gdTable"></tbody></table></div>
+  </div>
+  <div class="grid2">
+    <div class="card prose">
+      <h3>유튜브·커뮤니티의 고정수·제외수 선정법</h3>
+      <ol>
+        <li><b>직전 회차 번호 제외</b>: 가장 기본적인 방법. 직전 회차 6개 중 1~2개는 이월수로 남기고 나머지를 제외합니다. 이 프로그램 검증 탭의 백테스트에서 실제로 직전 회차 번호가 1개 이상 다시 나온 비율을 확인할 수 있습니다.</li>
+        <li><b>이월수·이웃수</b>: 직전 회차 번호(이월수)나 그 ±1 번호(이웃수)가 다음 회차에 나올 가능성을 따집니다. 회차 분석 영상에서 자주 다루는 변수입니다.</li>
+        <li><b>장기 미출현수</b>: 오래 안 나온 번호를 "나올 때가 됐다"며 고정하거나, 반대로 "흐름이 끊겼다"며 제외합니다. 같은 데이터로 정반대 결론을 내는 셈이라 둘 다 근거가 약합니다.</li>
+        <li><b>핫넘버·콜드넘버 가중</b>: 최근 많이 나온 번호를 따라가는 방식과 덜 나온 번호가 평균으로 돌아온다고 보는 방식이 있습니다. 생성기의 "방식" 메뉴로 둘 다 써 볼 수 있습니다.</li>
+        <li><b>궁합수</b>: 특정 번호와 함께 자주 나온 번호를 고정수 후보로 씁니다. 번호 통계 탭과 생성기의 후보 번호에서 확인할 수 있습니다.</li>
+        <li><b>점수 시스템</b>: 여러 분석 항목(출현 빈도, 미출현 기간, 이월·이웃, 끝수 등)에 점수를 매겨 합산한 뒤 상위 번호를 고정수, 하위 번호를 제외수로 고르는 방식입니다.</li>
+        <li><b>용지 패턴</b>: 모서리수, 삼각·대각선 같은 마킹 모양을 피하거나 포함하는 방식입니다.</li>
+      </ol>
+    </div>
+    <div class="card prose">
+      <h3>이 프로그램 사용 순서</h3>
+      <ol>
+        <li><b>번호 통계</b>와 <b>패턴 분포</b>에서 최근 흐름을 봅니다.</li>
+        <li><b>번호 생성기</b>에서 고정수·제외수를 고릅니다. 후보 번호 버튼으로 직전 회차, 핫·콜드, 장기 미출현, 궁합수를 바로 넣을 수 있습니다.</li>
+        <li>조건 필터를 켜고 범위를 조정합니다. 아래쪽 "모든 조건 통과" 비율이 너무 낮아지지 않게 하세요.</li>
+        <li><b>번호 생성</b>을 누르면 조건을 모두 통과한 조합 전체 개수를 세고, 그중에서 골라 줍니다. 6개 이상 만들면 아래에 그중 <b>정밀 분석 추천 5개</b>가 함께 나옵니다.</li>
+        <li>마음에 드는 조합은 저장하고, 추첨 후 <b>고정·제외수 검증</b>과 <b>내 번호 조회</b>로 결과를 확인합니다.</li>
+      </ol>
+      <h3>데이터 업데이트</h3>
+      <p>PC에 받은 프로그램은 폴더 안 <b>데이터업데이트.bat</b>을 더블클릭하면 동행복권에서 새 회차를 받아 옵니다(매주 토요일 추첨 후). 원본 데이터는 <b>data/lotto_history.csv</b>로도 저장되어 엑셀에서 열 수 있습니다.</p>
+    </div>
+  </div>
+  <div class="card prose src">
+    <h3>참고한 자료</h3>
+    <ul>
+      <li>당첨번호 원본: <a href="https://www.dhlottery.co.kr" target="_blank" rel="noopener">동행복권 회차별 당첨결과</a></li>
+      <li>분석 항목·권장 구간: <a href="https://lottotapa.com/note/johab_note.php" target="_blank" rel="noopener">로또타파 1등 조합 분석방법</a>, <a href="https://www.lottobook.co.kr/intro/intro_lotto_stats.php" target="_blank" rel="noopener">로또북 로또분석방법</a></li>
+      <li>고정수·제외수 개념: <a href="https://lottotapa.com/board/bbs/board.php?bo_table=free&amp;wr_id=15627" target="_blank" rel="noopener">로또타파 "예상수? 고정수? 제외수?"</a>, <a href="https://todaylotto.kr/filter" target="_blank" rel="noopener">고정수·제외수 조합기 예시</a></li>
+      <li>유튜브: <a href="https://www.youtube.com/watch?v=2OLd9vcNhQg" target="_blank" rel="noopener">고정수/제외수 18가지 분석 점수 시스템</a>, <a href="https://www.youtube.com/watch?v=Fqbmy7uwis8" target="_blank" rel="noopener">1231회 이월수 분석</a>, <a href="https://www.youtube.com/watch?v=HDqy6HDErQ8" target="_blank" rel="noopener">장기 미출현수와 끝수 분석</a>, <a href="https://www.youtube.com/watch?v=a53iAbZgQeg" target="_blank" rel="noopener">제외수·장기미출현번호</a>, <a href="https://www.youtube.com/watch?v=HwQDp2o9apI" target="_blank" rel="noopener">고정수 찾아 반자동 하는 방법</a></li>
+      <li>소수·3의 배수·합성수·이웃수 필터: <a href="https://patents.google.com/patent/KR20180125836A/ko" target="_blank" rel="noopener">특허 KR20180125836A</a></li>
+    </ul>
+    <p class="note">유튜브 영상은 제목과 주제 위주로 분류했습니다. 사이트마다 같은 항목도 계산 방식과 기준 회차가 조금씩 다릅니다.</p>
+  </div>
+</section>
+</main>
+
+<button class="chat-fab" id="chatFab" aria-controls="chatPanel" aria-expanded="false">채팅으로 명령</button>
+<aside class="chat" id="chatPanel" hidden aria-label="채팅으로 명령">
+  <header class="chat-head">
+    <div><h3>채팅으로 명령</h3><p id="chatMode">말하면 고정수·제외수·필터가 바로 바뀌고 번호를 만듭니다</p></div>
+    <button class="btn small" id="chatClose" aria-label="채팅 닫기">닫기</button>
+  </header>
+  <div class="chat-log" id="chatLog" aria-live="polite"></div>
+  <div class="chat-ex" id="chatEx">
+    <button data-ex="10개 뽑아줘">10개 뽑아줘</button>
+    <button data-ex="직전 회차 번호 제외하고 10개 뽑아줘">직전 회차 제외하고 10개</button>
+    <button data-ex="7 13 고정">7 13 고정</button>
+    <button data-ex="최근 10회 핫넘버 2개 고정하고 핫넘버 가중으로 20개 만들어줘">핫넘버 2개 고정 + 20개</button>
+    <button data-ex="합계 120~160으로 바꿔줘">합계 120~160</button>
+    <button data-ex="고정수 제외수 모두 비워줘">모두 비우기</button>
+  </div>
+  <form class="chat-form" id="chatForm">
+    <textarea id="chatIn" rows="2" placeholder="예: 7번 고정, 1 4 9 제외하고 10개 뽑아줘" aria-label="명령 입력"></textarea>
+    <button class="btn primary" id="chatSend" type="submit">보내기</button>
+    <button class="btn" id="chatStop" type="button" hidden>멈춤</button>
+  </form>
+</aside>
+
+<div class="tip" id="tip" hidden></div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="data/lotto_data.js" charset="utf-8"></script>
+<script src="pick5.js" charset="utf-8"></script>
+<script>
+/* 핸드폰 앱: 오프라인 실행 + 매번 열 때 최신 당첨번호 확인 */
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  navigator.serviceWorker.register('sw.js').then(reg => {
+    reg.update().catch(() => {});
+    navigator.serviceWorker.addEventListener('message', e => {
+      if (e.data && e.data.type === 'data-updated') location.reload(); // 새 회차가 들어오면 다시 그림
+    });
+  }).catch(() => {});
+}
+/* 안드로이드 크롬: "앱 설치" 버튼 */
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  const brand = document.querySelector('.brand'); if (!brand || document.getElementById('installBtn')) return;
+  const b = document.createElement('button'); b.id = 'installBtn'; b.className = 'btn small primary'; b.style.marginLeft = 'auto'; b.textContent = '앱 설치';
+  b.onclick = async () => { e.prompt(); try { await e.userChoice; } catch (_) {} b.remove(); };
+  brand.appendChild(b);
+});
+</script>
+<script>
+(function(){
+'use strict';
+const RAW = window.LOTTO_DATA;
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+if (!RAW || !RAW.rows || !RAW.rows.length) { $('#fatal').hidden = false; $('#app').hidden = true; $('#tabs').hidden = true; return; }
+
+/* ---------- 기본 정의 ---------- */
+const PRIME = new Set([2,3,5,7,11,13,17,19,23,29,31,37,41,43]);
+const SQUARE = new Set([1,4,9,16,25,36]);
+const DOUBLE = new Set([11,22,33,44]);
+const CORNER = new Set([1,2,8,9,6,7,13,14,29,30,36,37,34,35,41,42]);
+const isComp = v => v > 1 && !PRIME.has(v) && v % 3 !== 0;
+const grp = v => v <= 10 ? 0 : v <= 20 ? 1 : v <= 30 ? 2 : v <= 40 ? 3 : 4;
+const GROUPS = [['1~10','노랑',10],['11~20','파랑',10],['21~30','빨강',10],['31~40','회색',10],['41~45','초록',5]];
+function comb(n, k){ if (k < 0 || k > n) return 0; let r = 1; for (let i = 1; i <= k; i++) r = r * (n - k + i) / i; return Math.round(r); }
+const TOTAL = comb(45, 6);
+const keyOf = n => ((((n[0]*64 + n[1])*64 + n[2])*64 + n[3])*64 + n[4])*64 + n[5];
+
+const fmt = n => Number(n).toLocaleString('ko-KR');
+const pct = (a, b, d = 1) => b ? (a / b * 100).toFixed(d) + '%' : '-';
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function won(n){
+  if (!n) return '0원';
+  if (n >= 1e8){ const e = Math.floor(n / 1e8), m = Math.floor((n % 1e8) / 1e4); return fmt(e) + '억' + (m ? ' ' + fmt(m) + '만' : '') + '원'; }
+  if (n >= 1e4) return fmt(Math.floor(n / 1e4)) + '만원';
+  return fmt(n) + '원';
+}
+const ball = (v, cls = '') => `<span class="ball g${grp(v)} ${cls}">${v}</span>`;
+const balls = (arr, cls = '', fn) => arr.map(v => ball(v, (fn ? fn(v) : '') + ' ' + cls)).join('');
+function kDate(s){ const [y, m, d] = s.split('-').map(Number); return `${y}년 ${m}월 ${d}일`; }
+function addDays(s, n){ const d = new Date(s + 'T00:00:00'); d.setDate(d.getDate() + n); return d; }
+function parseNums(str){ const out = []; (String(str).match(/\d+/g) || []).forEach(x => { const v = +x; if (v >= 1 && v <= 45 && !out.includes(v)) out.push(v); }); return out; }
+
+/* ---------- 데이터 ---------- */
+const DRAWS = RAW.rows.map(r => ({ r:r[0], d:r[1], n:r.slice(2,8).sort((a,b)=>a-b), b:r[8], w1c:r[9], w1a:r[10], w2c:r[11], w2a:r[12], w3c:r[13], w3a:r[14], w4c:r[15], w4a:r[16], w5c:r[17], w5a:r[18], sales:r[19], auto:r[20], manual:r[21], semi:r[22] }));
+function metrics(n, prev){
+  const ps = prev ? new Set(prev) : null;
+  let sum=0, odd=0, low=0, prime=0, m3=0, m5=0, comp=0, sq=0, dbl=0, corner=0, endSum=0, consec=0, carry=0, neighbor=0;
+  const ends = new Array(10).fill(0), groups = [0,0,0,0,0], diffs = new Set();
+  for (let i = 0; i < 6; i++){
+    const v = n[i];
+    sum += v; if (v & 1) odd++; if (v <= 22) low++; if (PRIME.has(v)) prime++; if (v % 3 === 0) m3++; if (v % 5 === 0) m5++;
+    if (isComp(v)) comp++; if (SQUARE.has(v)) sq++; if (DOUBLE.has(v)) dbl++; if (CORNER.has(v)) corner++;
+    endSum += v % 10; ends[v % 10]++; groups[grp(v)]++;
+    if (i && v - n[i-1] === 1) consec++;
+    for (let j = 0; j < i; j++) diffs.add(v - n[j]);
+    if (ps){ if (ps.has(v)) carry++; else if (ps.has(v-1) || ps.has(v+1)) neighbor++; }
+  }
+  return { sum, odd, low, ac: diffs.size - 5, endSum, consec, sameEnd: Math.max(...ends), sameGroup: Math.max(...groups),
+    prime, m3, m5, comp, sq, dbl, corner, first: n[0], last: n[5], carry: ps ? carry : null, neighbor: ps ? neighbor : null };
+}
+DRAWS.forEach((d, i) => { d.m = metrics(d.n, i ? DRAWS[i-1].n : null); });
+const LAST = DRAWS[DRAWS.length - 1];
+const BY_ROUND = new Map(DRAWS.map(d => [d.r, d]));
+const WIN_KEYS = new Set(DRAWS.map(d => keyOf(d.n)));
+const LAST_SEEN = new Array(46).fill(0), COUNT_ALL = new Array(46).fill(0);
+DRAWS.forEach(d => d.n.forEach(v => { LAST_SEEN[v] = d.r; COUNT_ALL[v]++; }));
+const gapOf = v => LAST.r - LAST_SEEN[v];
+function freqOf(draws, withBonus){ const f = new Array(46).fill(0); for (const d of draws){ for (const v of d.n) f[v]++; if (withBonus) f[d.b]++; } return f; }
+const recent = n => n ? DRAWS.slice(-n) : DRAWS;
+function topBy(score, k, desc = true){ const a = []; for (let v = 1; v <= 45; v++) a.push(v); a.sort((x, y) => desc ? (score(y) - score(x)) || (x - y) : (score(x) - score(y)) || (x - y)); return a.slice(0, k); }
+function pairCounts(draws, x){ const c = new Array(46).fill(0); for (const d of draws) if (d.n.includes(x)) for (const v of d.n) if (v !== x) c[v]++; return c; }
+
+/* ---------- 필터 정의 (출처: 로또타파·로또북) ---------- */
+const FILTERS = [
+  {k:'sum', name:'번호 합계', lo:21, hi:255, def:[100,175], on:1, tip:'6개 번호를 모두 더한 값', tapa:'100~175', book:'81~200'},
+  {k:'odd', name:'홀수 개수', lo:0, hi:6, def:[1,5], on:1, tip:'홀:짝 6:0, 0:6 제외', tapa:'6:0·0:6 제외', book:'모두 홀·짝 비추천'},
+  {k:'low', name:'저번호 개수', lo:0, hi:6, def:[1,5], on:1, tip:'1~22는 저, 23~45는 고', tapa:'6:0·0:6 제외', book:'모두 고·저 비추천'},
+  {k:'ac', name:'AC값', lo:0, hi:10, def:[7,10], on:1, tip:'번호 사이 차이값의 종류 수 − 5. 클수록 고르게 흩어진 조합', tapa:'7 이상', book:'6 이상'},
+  {k:'endSum', name:'끝수합', lo:0, hi:54, def:[15,38], on:1, tip:'각 번호 끝자리의 합', tapa:'15~38', book:'13~38'},
+  {k:'consec', name:'연번 쌍 개수', lo:0, hi:5, def:[0,2], on:1, tip:'14-15처럼 붙은 번호 쌍의 수', tapa:'2연번까지', book:'2회 이하'},
+  {k:'sameEnd', name:'동끝수 최대', lo:1, hi:6, def:[1,3], on:1, tip:'끝자리가 같은 번호가 가장 많이 겹친 개수', tapa:'3개 이하', book:'3 이하'},
+  {k:'sameGroup', name:'한 번호대 최대', lo:2, hi:6, def:[2,3], on:1, tip:'1~10·11~20·21~30·31~40·41~45 중 한 구간에 몰린 개수', tapa:'3개 이하', book:'3 이하'},
+  {k:'prime', name:'소수 개수', lo:0, hi:6, def:[0,3], on:1, tip:'2·3·5·7·11·13·17·19·23·29·31·37·41·43', tapa:'0~3', book:'3 이하'},
+  {k:'m3', name:'3의 배수 개수', lo:0, hi:6, def:[0,3], on:0, tip:'3·6·9 … 45 (15개)', tapa:'0~3', book:'4 이하'},
+  {k:'m5', name:'5의 배수 개수', lo:0, hi:6, def:[0,2], on:0, tip:'5·10 … 45 (9개)', tapa:'0~2', book:'3 이하'},
+  {k:'comp', name:'합성수 개수', lo:0, hi:6, def:[0,3], on:0, tip:'1·소수·3의 배수를 뺀 16개 (4·8·10·14·16·20·22·25·26·28·32·34·35·38·40·44)', tapa:'0~3', book:'4 이하'},
+  {k:'sq', name:'완전제곱수 개수', lo:0, hi:6, def:[0,2], on:0, tip:'1·4·9·16·25·36', tapa:'0~2', book:'-'},
+  {k:'dbl', name:'쌍수 개수', lo:0, hi:4, def:[0,2], on:0, tip:'11·22·33·44', tapa:'0~2', book:'2 이하'},
+  {k:'corner', name:'모서리수 개수', lo:0, hi:6, def:[1,4], on:0, tip:'용지 네 모서리 2×2 칸 16개 번호', tapa:'1~4', book:'-'},
+  {k:'first', name:'첫 번호(최소)', lo:1, hi:40, def:[1,14], on:0, tip:'조합에서 가장 작은 번호', tapa:'14 이하', book:'-'},
+  {k:'last', name:'끝 번호(최대)', lo:6, hi:45, def:[31,45], on:0, tip:'조합에서 가장 큰 번호', tapa:'31 이상', book:'-'},
+  {k:'carry', name:'이월수 개수', lo:0, hi:6, def:[0,2], on:0, tip:'직전 회차 당첨번호가 다시 나온 개수', tapa:'-', book:'-'},
+  {k:'neighbor', name:'이웃수 개수', lo:0, hi:6, def:[0,3], on:0, tip:'직전 회차 번호의 ±1 번호 개수', tapa:'-', book:'-'},
+];
+const FMAP = Object.fromEntries(FILTERS.map(f => [f.k, f]));
+const defaultFilters = () => Object.fromEntries(FILTERS.map(f => [f.k, {on: !!f.on, min: f.def[0], max: f.def[1]}]));
+
+/* ---------- 상태 (브라우저에 저장) ---------- */
+const STORE = 'lotto645-analyzer-v1';
+let saved = {};
+try { saved = JSON.parse(localStorage.getItem(STORE)) || {}; } catch (e) { saved = {}; }
+const S = {
+  tab: 'home', mode: 'fix',
+  fixed: new Set(saved.fixed || []), excl: new Set(saved.excl || []),
+  filters: Object.assign(defaultFilters(), saved.filters || {}),
+  excludePast: saved.excludePast !== false, weight: saved.weight || 'uniform', count: saved.count || 10,
+  saved: Array.isArray(saved.saved) ? saved.saved : [],
+  stPeriod: 0, stBonus: false, ptPeriod: 0, pairSel: 0,
+  hs: { page: 0 }, vRound: LAST.r, results: null, busy: false,
+};
+function persist(){
+  try { localStorage.setItem(STORE, JSON.stringify({ fixed:[...S.fixed], excl:[...S.excl], filters:S.filters, excludePast:S.excludePast, weight:S.weight, count:S.count, saved:S.saved })); } catch (e) {}
+}
+
+/* ---------- 공통 UI ---------- */
+const tipEl = $('#tip'), toastEl = $('#toast');
+let toastTimer;
+function toast(msg){ toastEl.textContent = msg; toastEl.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => toastEl.hidden = true, 2200); }
+function placeTip(x, y){
+  const w = tipEl.offsetWidth, h = tipEl.offsetHeight;
+  let left = x + 14, top = y - h - 12;
+  if (left + w > innerWidth - 8) left = x - w - 14;
+  if (left < 8) left = 8;
+  if (top < 8) top = y + 18;
+  tipEl.style.left = left + 'px'; tipEl.style.top = top + 'px';
+}
+document.addEventListener('pointerover', e => {
+  const t = e.target.closest('[data-tip]');
+  if (!t){ tipEl.hidden = true; return; }
+  tipEl.textContent = t.dataset.tip; tipEl.hidden = false; placeTip(e.clientX, e.clientY);
+});
+document.addEventListener('pointermove', e => { if (!tipEl.hidden) placeTip(e.clientX, e.clientY); });
+document.addEventListener('scroll', () => { tipEl.hidden = true; }, true);
+async function copyText(text){
+  try { await navigator.clipboard.writeText(text); toast('복사했습니다'); }
+  catch (e) {
+    const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    let ok = false; try { ok = document.execCommand('copy'); } catch (_) {}
+    ta.remove(); toast(ok ? '복사했습니다' : '복사하지 못했습니다. 번호를 직접 선택해 복사하세요');
+  }
+}
+function niceMax(v){ if (v <= 5) return 5; const p = Math.pow(10, Math.floor(Math.log10(v))); for (const m of [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10]) if (m * p >= v) return m * p; return 10 * p; }
+
+/* 막대그래프: values[i] 높이, tips[i] 툴팁, hi = 강조 인덱스, band(i) = 범위 음영, mean = 평균선 */
+function barChart({ labels, values, tips, hi = new Set(), band = null, mean = null, every = 1, height = 170, mark = -1, showVals = false, unit = '' }){
+  const n = values.length, top = niceMax(Math.max(...values, mean || 0, 1));
+  const ticks = [0, top / 2, top];
+  const cols = `grid-template-columns:repeat(${n},minmax(0,1fr))`;
+  let h = `<div class="chart" style="--h:${height}px"><div class="yaxis">${ticks.map(t => `<span style="bottom:${t / top * 100}%">${fmt(Math.round(t * 10) / 10)}${unit}</span>`).join('')}</div><div class="plot">`;
+  h += ticks.slice(1).map(t => `<div class="gl" style="bottom:${t / top * 100}%"></div>`).join('');
+  if (mean != null) h += `<div class="meanline" style="bottom:${mean / top * 100}%"><span>평균 ${fmt(Math.round(mean * 10) / 10)}${unit}</span></div>`;
+  h += `<div class="cols" style="${cols}">`;
+  for (let i = 0; i < n; i++){
+    const pctH = values[i] / top * 100;
+    h += `<div class="col${band && band(i) ? ' inband' : ''}" data-tip="${esc(tips[i])}"><div class="bar${hi.has(i) || i === mark ? ' hi' : ''}" style="height:${pctH}%"></div>${showVals && values[i] ? `<span class="vl" style="bottom:calc(${pctH}% + 3px)">${fmt(Math.round(values[i] * 10) / 10)}${unit}</span>` : ''}</div>`;
+  }
+  h += `</div></div><div class="xaxis" style="${cols}">${labels.map((l, i) => `<span class="${i === mark ? 'mk' : ''}">${(i % every === 0 || i === mark) ? l : ''}</span>`).join('')}</div></div>`;
+  return h;
+}
+
+/* ---------- 탭 ---------- */
+const TABS = ['home','history','stats','patterns','generator','verify','check','guide'];
+const rendered = {};
+function showTab(t, push = true){
+  if (!TABS.includes(t)) t = 'home';
+  S.tab = t;
+  $$('#tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t ? 'true' : 'false'));
+  TABS.forEach(x => { $('#tab-' + x).hidden = x !== t; });
+  RENDER[t]();
+  rendered[t] = true;
+  if (push) { try { history.replaceState(null, '', '#' + t); } catch (e) {} }
+  tipEl.hidden = true;
+  if (push) scrollTo({ top: 0 });
+}
+$('#tabs').addEventListener('click', e => { const b = e.target.closest('button[data-tab]'); if (b) showTab(b.dataset.tab); });
+document.addEventListener('click', e => { const g = e.target.closest('[data-goto]'); if (g) showTab(g.dataset.goto); });
+
+/* ---------- 홈 ---------- */
+function traitList(m){
+  return [
+    ['합계', m.sum, 'sum'], ['홀:짝', `${m.odd}:${6 - m.odd}`, 'odd', m.odd], ['저:고', `${m.low}:${6 - m.low}`, 'low', m.low],
+    ['AC', m.ac, 'ac'], ['끝수합', m.endSum, 'endSum'], ['연번', m.consec + '쌍', 'consec', m.consec],
+    ['소수', m.prime + '개', 'prime', m.prime], ['동끝수', m.sameEnd, 'sameEnd'], ['번호대 최대', m.sameGroup, 'sameGroup'],
+  ].concat(m.carry != null ? [['이월수', m.carry + '개', 'carry', m.carry], ['이웃수', m.neighbor + '개', 'neighbor', m.neighbor]] : []);
+}
+function shareOf(k, val){ let c = 0, t = 0; for (const d of DRAWS){ const x = d.m[k]; if (x == null) continue; t++; if (x === val) c++; } return pct(c, t); }
+function renderHome(){
+  const d = LAST, nextDate = addDays(d.d, 7);
+  $('#hRound').textContent = `제${d.r}회`;
+  $('#hDate').textContent = kDate(d.d) + ' 추첨';
+  $('#hBalls').innerHTML = balls(d.n, 'lg') + '<span class="plus">+</span>' + ball(d.b, 'lg');
+  $('#hPrize').innerHTML = [
+    ['1등 당첨자', d.w1c ? `${fmt(d.w1c)}명` : '없음(이월)'],
+    ['1등 1인당', won(d.w1a)],
+    ['1등 구매 방식', d.w1c ? `자동 ${d.auto} · 수동 ${d.manual} · 반자동 ${d.semi}` : '-'],
+    ['2등', `${fmt(d.w2c)}명 · ${won(d.w2a)}`],
+    ['총 판매금액', won(d.sales)],
+  ].map(([a, b]) => `<div><dt>${a}</dt><dd>${b}</dd></div>`).join('');
+  $('#nRound').textContent = `제${d.r + 1}회`;
+  $('#nDate').textContent = `${nextDate.getFullYear()}년 ${nextDate.getMonth() + 1}월 ${nextDate.getDate()}일(토) 오후 8시 35분 추첨 예정`;
+  $('#hTraits').innerHTML = traitList(d.m).map(([a, b, k, raw]) => `<span class="chip" data-tip="역대 1등 조합 중 같은 값: ${shareOf(k, raw != null ? raw : d.m[k])}">${a} <b>${b}</b></span>`).join('');
+  const most = topBy(v => COUNT_ALL[v], 1)[0], longest = topBy(gapOf, 1)[0];
+  const maxPrize = DRAWS.reduce((a, x) => x.w1a > a.w1a ? x : a), maxWin = DRAWS.reduce((a, x) => x.w1c > a.w1c ? x : a);
+  $('#hTiles').innerHTML = [
+    ['누적 추첨', `${fmt(DRAWS.length)}회`, `${DRAWS[0].d.replace(/-/g,'.')} ~ ${d.d.replace(/-/g,'.')}`],
+    ['역대 최다 출현', `${ball(most, 'sm')} ${fmt(COUNT_ALL[most])}회`, `평균 ${(DRAWS.length * 6 / 45).toFixed(1)}회`],
+    ['현재 최장 미출현', `${ball(longest, 'sm')} ${gapOf(longest)}회째`, `마지막 출현 ${LAST_SEEN[longest]}회`],
+    ['1등 1인당 최고액', won(maxPrize.w1a), `${maxPrize.r}회 · ${maxPrize.w1c}명 당첨`],
+    ['1등 최다 당첨자', `${fmt(maxWin.w1c)}명`, `${maxWin.r}회 · 1인당 ${won(maxWin.w1a)}`],
+  ].map(([a, b, c]) => `<div class="tile"><span class="lbl">${a}</span><span class="val">${b}</span><span class="sub">${c}</span></div>`).join('');
+  $('#hRecent').innerHTML = DRAWS.slice(-10).reverse().map(x => `<div class="recent-row"><span class="r">${x.r}회<small>${x.d.slice(2).replace(/-/g,'.')}</small></span><span class="balls">${balls(x.n, 'sm')}<span class="plus">+</span>${ball(x.b, 'sm')}</span><span class="w">1등 ${x.w1c}명 · ${won(x.w1a)}</span></div>`).join('');
+}
+
+/* ---------- 역대 당첨번호 ---------- */
+const PAGE = 50;
+function renderHistory(){
+  if (!rendered.history){
+    const years = [...new Set(DRAWS.map(d => d.d.slice(0, 4)))].reverse();
+    $('#hsYear').insertAdjacentHTML('beforeend', years.map(y => `<option>${y}</option>`).join(''));
+    $('#hsSummary').textContent = `1회(${kDate(DRAWS[0].d)})부터 ${LAST.r}회(${kDate(LAST.d)})까지 ${fmt(DRAWS.length)}개 회차`;
+    ['hsRound','hsNums','hsYear','hsSort'].forEach(id => $('#' + id).addEventListener('input', () => { S.hs.page = 0; drawHistory(); }));
+    $('#hsReset').onclick = () => { $('#hsRound').value = ''; $('#hsNums').value = ''; $('#hsYear').value = ''; $('#hsSort').value = 'desc'; S.hs.page = 0; drawHistory(); };
+    $('#hsPager').addEventListener('click', e => { const b = e.target.closest('button[data-p]'); if (b){ S.hs.page = +b.dataset.p; drawHistory(); $('#tab-history').scrollIntoView({ block: 'start' }); } });
+  }
+  drawHistory();
+}
+function drawHistory(){
+  const r = +$('#hsRound').value, nums = parseNums($('#hsNums').value), y = $('#hsYear').value, sort = $('#hsSort').value;
+  let list = DRAWS.filter(d => (!r || d.r === r) && (!y || d.d.startsWith(y)) && nums.every(v => d.n.includes(v)));
+  if (sort === 'desc') list = list.slice().reverse();
+  else if (sort === 'w1a') list = list.slice().sort((a, b) => b.w1a - a.w1a);
+  else if (sort === 'w1c') list = list.slice().sort((a, b) => b.w1c - a.w1c);
+  const pages = Math.max(1, Math.ceil(list.length / PAGE)); if (S.hs.page >= pages) S.hs.page = pages - 1;
+  const ns = new Set(nums);
+  $('#hsCount').textContent = `${fmt(list.length)}개 회차` + (nums.length ? ` · 전체의 ${pct(list.length, DRAWS.length)}` : '');
+  $('#hsBody').innerHTML = list.slice(S.hs.page * PAGE, (S.hs.page + 1) * PAGE).map(d => `<tr>
+    <td><b>${d.r}</b></td><td class="mono">${d.d}</td>
+    <td><span class="balls">${balls(d.n, 'xs', v => ns.has(v) ? 'ring' : '')}</span></td><td>${ball(d.b, 'xs')}</td>
+    <td class="n">${d.m.sum}</td><td class="mono">${d.m.odd}:${6 - d.m.odd}</td><td class="mono">${d.m.low}:${6 - d.m.low}</td><td class="n">${d.m.ac}</td>
+    <td class="n">${d.w1c ? fmt(d.w1c) + '명' : '이월'}</td><td class="n">${d.w1c ? won(d.w1a) : '-'}</td>
+    <td class="mono">${d.w1c && (d.auto + d.manual + d.semi) ? `${d.auto}·${d.manual}·${d.semi}` : '-'}</td></tr>`).join('') || '<tr><td colspan="11" class="empty">조건에 맞는 회차가 없습니다.</td></tr>';
+  let p = '';
+  if (pages > 1){
+    const cur = S.hs.page, set = new Set([0, pages - 1, cur - 1, cur, cur + 1].filter(x => x >= 0 && x < pages));
+    let prev = -1;
+    [...set].sort((a, b) => a - b).forEach(x => { if (x - prev > 1) p += '<span>…</span>'; p += `<button class="btn small${x === cur ? ' primary' : ''}" data-p="${x}">${x + 1}</button>`; prev = x; });
+  }
+  $('#hsPager').innerHTML = p;
+}
+
+/* ---------- 번호 통계 ---------- */
+const PERIODS = [[0,'전체'],[100,'최근 100회'],[50,'최근 50회'],[20,'최근 20회'],[10,'최근 10회']];
+function segHTML(cur){ return PERIODS.map(([n, l]) => `<button data-n="${n}" aria-pressed="${n === cur}">${l}</button>`).join(''); }
+function renderStats(){
+  if (!rendered.stats){
+    $('#stPeriod').addEventListener('click', e => { const b = e.target.closest('button'); if (b){ S.stPeriod = +b.dataset.n; renderStats(); } });
+    $('#stBonus').addEventListener('change', e => { S.stBonus = e.target.checked; renderStats(); });
+    $('#stPairSel').innerHTML = Array.from({ length: 45 }, (_, i) => `<option value="${i + 1}">${i + 1}번</option>`).join('');
+    S.pairSel = LAST.n[0];
+    $('#stPairSel').addEventListener('change', e => { S.pairSel = +e.target.value; drawPairs(); });
+  }
+  $('#stPeriod').innerHTML = segHTML(S.stPeriod);
+  $('#stPairSel').value = S.pairSel;
+  const draws = recent(S.stPeriod), f = freqOf(draws, S.stBonus), per = S.stBonus ? 7 : 6, totalBalls = draws.length * per;
+  const label = PERIODS.find(p => p[0] === S.stPeriod)[1];
+  $('#stFreqTitle').textContent = `번호별 출현 횟수 · ${label} (${fmt(draws.length)}회)`;
+  const vals = f.slice(1), top6 = new Set(topBy(v => f[v], 6).map(v => v - 1));
+  $('#stFreq').innerHTML = barChart({
+    labels: vals.map((_, i) => (innerWidth >= 560 || i === 0 || (i + 1) % 5 === 0) ? i + 1 : ''), values: vals, hi: top6, mean: totalBalls / 45,
+    tips: vals.map((c, i) => `${i + 1}번 · ${c}회 (${pct(c, draws.length)} 회차에 출현)\n전체 기간 마지막 출현: ${LAST_SEEN[i + 1]}회 (${gapOf(i + 1)}회 전)`),
+  });
+  const mx = Math.max(...vals, 1);
+  const rankRow = v => `<div class="rank-row">${ball(v, 'sm')}<div class="track"><i style="width:${f[v] / mx * 100}%"></i></div><span class="v">${f[v]}회 · ${pct(f[v], draws.length, 0)}</span></div>`;
+  $('#stHot').innerHTML = topBy(v => f[v], 10).map(rankRow).join('');
+  $('#stCold').innerHTML = topBy(v => f[v], 10, false).map(rankRow).join('');
+  $('#stGap').innerHTML = topBy(gapOf, 12).map(v => `<tr><td>${ball(v, 'xs')}</td><td class="n"><b>${gapOf(v)}회</b></td><td class="n">${LAST_SEEN[v]}회</td><td class="n">${(DRAWS.length / COUNT_ALL[v]).toFixed(1)}회</td></tr>`).join('');
+  const gsum = [0,0,0,0,0]; for (let v = 1; v <= 45; v++) gsum[grp(v)] += f[v];
+  const gmx = Math.max(...gsum.map(x => x / totalBalls), 0.25);
+  $('#stGroup').innerHTML = GROUPS.map(([r, c, cnt], i) => `<div class="hbar" data-tip="${r} (${c}) · ${fmt(gsum[i])}개 · 기대 ${pct(cnt, 45)}"><span>${ball(i * 10 + 1, 'xs')} ${r}</span><div class="track"><div class="fill" style="width:${gsum[i] / totalBalls / gmx * 100}%"></div><div class="exp" style="left:${cnt / 45 / gmx * 100}%"></div></div><span class="v">${pct(gsum[i], totalBalls)}</span></div>`).join('');
+  let odd = 0, low = 0; for (let v = 1; v <= 45; v++){ if (v & 1) odd += f[v]; if (v <= 22) low += f[v]; }
+  $('#stOddLow').textContent = `같은 기간 홀수 비율 ${pct(odd, totalBalls)} (기대 51.1%) · 저번호(1~22) 비율 ${pct(low, totalBalls)} (기대 48.9%)`;
+  const r10 = freqOf(recent(10), false);
+  $('#stTable').innerHTML = Array.from({ length: 45 }, (_, i) => i + 1).map(v => `<tr><td>${ball(v, 'xs')}</td><td class="n">${f[v]}</td><td class="n">${pct(f[v], totalBalls, 2)}</td><td class="n">${r10[v]}</td><td class="n">${COUNT_ALL[v]}</td><td class="n">${gapOf(v)}회</td></tr>`).join('');
+  drawPairs();
+}
+function drawPairs(){
+  const draws = recent(S.stPeriod), x = S.pairSel, c = pairCounts(draws, x), app = draws.filter(d => d.n.includes(x)).length;
+  const top = topBy(v => v === x ? -1 : c[v], 10), mx = Math.max(c[top[0]], 1);
+  $('#stPairs').innerHTML = `<p class="hint">${x}번이 나온 ${app}개 회차에서 함께 나온 번호 상위 10개 (기대값 약 ${(app * 5 / 44).toFixed(1)}회)</p>` +
+    top.map(v => `<div class="rank-row">${ball(v, 'sm')}<div class="track"><i style="width:${c[v] / mx * 100}%"></i></div><span class="v">${c[v]}회 · ${pct(c[v], app, 0)}</span></div>`).join('');
+}
+
+/* ---------- 패턴 분포 ---------- */
+const PT = [
+  ['sum','번호 합계',10],['odd','홀수 개수',1],['low','저번호(1~22) 개수',1],['ac','AC값',1],['endSum','끝수합',4],['consec','연번 쌍 개수',1],
+  ['sameEnd','동끝수 최대',1],['sameGroup','한 번호대 최대',1],['prime','소수 개수',1],['m3','3의 배수 개수',1],['carry','이월수 개수',1],['neighbor','이웃수 개수',1],
+  ['first','첫 번호',3],['last','끝 번호',3],['corner','모서리수 개수',1],['comp','합성수 개수',1],
+];
+function renderPatterns(){
+  if (!rendered.patterns) $('#ptPeriod').addEventListener('click', e => { const b = e.target.closest('button'); if (b){ S.ptPeriod = +b.dataset.n; renderPatterns(); } });
+  $('#ptPeriod').innerHTML = segHTML(S.ptPeriod);
+  const draws = recent(S.ptPeriod);
+  $('#ptGrid').innerHTML = PT.map(([k, name, w]) => {
+    const vals = draws.map(d => d.m[k]).filter(v => v != null);
+    if (!vals.length) return '';
+    const lo = Math.floor(Math.min(...vals) / w) * w, hi = Math.max(...vals);
+    const bins = []; for (let b = lo; b <= hi; b += w) bins.push(b);
+    const cnt = bins.map(b => vals.filter(v => v >= b && v < b + w).length);
+    const fs = S.filters[k], latest = LAST.m[k], mark = latest == null ? -1 : bins.findIndex(b => latest >= b && latest < b + w);
+    const inR = vals.filter(v => v >= fs.min && v <= fs.max).length;
+    const lbl = b => w === 1 ? String(b) : String(b);
+    return `<div class="card"><header><h3>${name}</h3><span class="pill neutral">최신 ${latest == null ? '-' : latest}</span></header>
+      ${barChart({ labels: bins.map(lbl), values: cnt.map(c => c / vals.length * 100), unit: '%', height: 120, mark, every: bins.length > 12 ? 2 : 1,
+        band: i => bins[i] >= fs.min && bins[i] + w - 1 <= fs.max,
+        tips: bins.map((b, i) => `${name} ${w === 1 ? b : b + '~' + (b + w - 1)}\n${fmt(cnt[i])}회 (${pct(cnt[i], vals.length)})`) })}
+      <p class="note">생성기 범위 ${fs.min}~${fs.max}${fs.on ? '' : ' (꺼짐)'} 안에 든 비율 <b>${pct(inR, vals.length)}</b> · 평균 ${(vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1)}</p></div>`;
+  }).join('');
+}
+
+/* ---------- 번호 생성기 ---------- */
+function setNum(v, mode, force){
+  if (mode === 'fix'){
+    if (S.fixed.has(v) && !force){ S.fixed.delete(v); return true; }
+    if (S.fixed.has(v)) return true;
+    if (S.fixed.size >= 5){ toast('고정수는 최대 5개까지 지정할 수 있습니다'); return false; }
+    S.excl.delete(v); S.fixed.add(v); return true;
+  }
+  if (S.excl.has(v) && !force){ S.excl.delete(v); return true; }
+  if (S.excl.has(v)) return true;
+  if (45 - S.excl.size - 1 < 6){ toast('최소 6개 번호는 남겨야 합니다'); return false; }
+  S.fixed.delete(v); S.excl.add(v); return true;
+}
+function afterNumChange(){ persist(); if (S.tab === 'generator'){ drawBoard(); drawHelpers(); } if (S.tab === 'verify') renderVerify(); }
+function drawBoard(){
+  $('#board').innerHTML = Array.from({ length: 45 }, (_, i) => i + 1).map(v => `<button class="cell${S.fixed.has(v) ? ' fix' : S.excl.has(v) ? ' excl' : ''}" data-v="${v}" aria-label="${v}번${S.fixed.has(v) ? ' 고정' : S.excl.has(v) ? ' 제외' : ''}">${v}</button>`).join('');
+  $$('#modeSeg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === S.mode ? 'true' : 'false'));
+  const fx = [...S.fixed].sort((a, b) => a - b), ex = [...S.excl].sort((a, b) => a - b);
+  $('#picked').innerHTML = `<div class="picked-row"><span class="lbl">고정수 ${fx.length}/5</span>${fx.length ? balls(fx, 'sm') : '<span class="empty">없음</span>'}</div>
+    <div class="picked-row"><span class="lbl">제외수 ${ex.length}</span>${ex.length ? balls(ex, 'sm strike') : '<span class="empty">없음</span>'}</div>
+    <p class="hint">남은 후보 ${45 - ex.length}개 · 고정 외 ${6 - fx.length}자리를 ${45 - ex.length - fx.length}개 중에서 고릅니다 (${fmt(comb(45 - ex.length - fx.length, 6 - fx.length))}가지)</p>`;
+}
+function drawHelpers(){
+  const prevSet = new Set(LAST.n);
+  const nb = []; for (let v = 1; v <= 45; v++) if (!prevSet.has(v) && (prevSet.has(v - 1) || prevSet.has(v + 1))) nb.push(v);
+  const f10 = freqOf(recent(10), false), hot = topBy(v => f10[v] * 1000 + LAST_SEEN[v], 7);
+  const cold = topBy(gapOf, 7);
+  const f50 = freqOf(recent(50), false), cold50 = topBy(v => f50[v], 7, false);
+  const groups = [
+    { t: `직전 회차(${LAST.r}회) 당첨번호`, p: '가장 기본적인 제외수 후보. 보통 1~2개는 이월수로 남깁니다.', nums: LAST.n, badge: () => '' },
+    { t: '직전 회차 보너스번호', p: '', nums: [LAST.b], badge: () => '' },
+    { t: '이웃수 후보 (직전 번호 ±1)', p: '직전 회차 번호 바로 옆 번호들', nums: nb, badge: () => '' },
+    { t: '최근 10회 핫넘버', p: '최근 10회 동안 많이 나온 번호', nums: hot, badge: v => f10[v] + '회' },
+    { t: '장기 미출현 번호', p: '오래 안 나온 번호 (몇 회째 미출현)', nums: cold, badge: v => gapOf(v) + '회' },
+    { t: '최근 50회 콜드넘버', p: '최근 50회 동안 가장 적게 나온 번호', nums: cold50, badge: v => f50[v] + '회' },
+  ];
+  if (S.fixed.size){
+    const c = new Array(46).fill(0); S.fixed.forEach(x => { const pc = pairCounts(DRAWS, x); for (let v = 1; v <= 45; v++) c[v] += pc[v]; });
+    groups.push({ t: '고정수의 궁합수', p: '지금 고정수와 역대 함께 많이 나온 번호', nums: topBy(v => S.fixed.has(v) ? -1 : c[v], 7), badge: v => c[v] + '회' });
+  }
+  $('#helperHint').textContent = `번호를 누르면 지금 선택한 모드(${S.mode === 'fix' ? '고정수' : '제외수'})로 들어가고, 다시 누르면 빠집니다.`;
+  $('#helpers').innerHTML = groups.map((g, gi) => `<div class="helper"><header><h4>${g.t}</h4><button class="btn small" data-all="${gi}">모두 ${S.mode === 'fix' ? '고정' : '제외'}</button></header>${g.p ? `<p>${g.p}</p>` : ''}
+    <div class="chips">${g.nums.map(v => `<button class="numchip${S.fixed.has(v) ? ' on-fix' : S.excl.has(v) ? ' on-excl' : ''}" data-v="${v}">${ball(v, 'xs')}${g.badge(v)}</button>`).join('')}</div></div>`).join('');
+  $('#helpers').dataset.groups = JSON.stringify(groups.map(g => g.nums));
+}
+function filterRows(){
+  $('#frows').innerHTML = FILTERS.map(f => { const s = S.filters[f.k]; return `<div class="frow${s.on ? '' : ' off'}" data-k="${f.k}">
+    <label class="fname"><input type="checkbox" data-f="on" ${s.on ? 'checked' : ''}><span>${f.name}<small>${f.tip}</small></span></label>
+    <div class="frange"><input type="number" data-f="min" min="${f.lo}" max="${f.hi}" value="${s.min}" aria-label="${f.name} 최소"> ~ <input type="number" data-f="max" min="${f.lo}" max="${f.hi}" value="${s.max}" aria-label="${f.name} 최대"></div>
+    <div class="fpass" data-tip=""><div class="meter"><i></i></div><span></span></div></div>`; }).join('');
+  $('#fPast').checked = S.excludePast;
+  updatePass();
+}
+function passOne(d, k){ const s = S.filters[k], x = d.m[k]; return x == null || (x >= s.min && x <= s.max); }
+function updatePass(){
+  FILTERS.forEach(f => {
+    let c = 0, t = 0; for (const d of DRAWS){ if (d.m[f.k] == null) continue; t++; if (passOne(d, f.k)) c++; }
+    const row = $(`.frow[data-k="${f.k}"]`); if (!row) return;
+    row.classList.toggle('off', !S.filters[f.k].on);
+    const p = c / t * 100;
+    row.querySelector('.meter i').style.width = p + '%';
+    row.querySelector('.fpass span').textContent = p.toFixed(1) + '%';
+    row.querySelector('.fpass').dataset.tip = `역대 1등 ${fmt(t)}개 조합 중 ${fmt(c)}개가 이 범위 안 (${p.toFixed(1)}%)`;
+  });
+  const on = FILTERS.filter(f => S.filters[f.k].on);
+  const all = DRAWS.filter(d => on.every(f => passOne(d, f.k))).length, p = all / DRAWS.length * 100;
+  const cls = p >= 60 ? 'good' : p >= 35 ? 'warn' : 'bad';
+  $('#combined').innerHTML = `<span>켜진 조건 ${on.length}개를 모두 통과한 역대 1등 조합</span><strong>${p.toFixed(1)}%</strong><span class="pill ${cls}">${cls === 'good' ? '적당함' : cls === 'warn' ? '다소 엄격' : '너무 엄격'}</span><span class="hint">${fmt(all)} / ${fmt(DRAWS.length)}회 · 나머지 ${(100 - p).toFixed(1)}%의 실제 1등 조합은 이 조건이면 걸러졌습니다</span>`;
+}
+function initGenerator(){
+  $('#modeSeg').addEventListener('click', e => { const b = e.target.closest('button[data-mode]'); if (b){ S.mode = b.dataset.mode; drawBoard(); drawHelpers(); } });
+  $('#board').addEventListener('click', e => { const b = e.target.closest('.cell'); if (b && setNum(+b.dataset.v, S.mode)) afterNumChange(); });
+  $('#helpers').addEventListener('click', e => {
+    const all = e.target.closest('[data-all]');
+    if (all){ const g = JSON.parse($('#helpers').dataset.groups)[+all.dataset.all]; for (const v of g) if (!setNum(v, S.mode, true)) break; afterNumChange(); return; }
+    const c = e.target.closest('.numchip'); if (c && setNum(+c.dataset.v, S.mode)) afterNumChange();
+  });
+  $('#clearAll').onclick = () => { S.fixed.clear(); S.excl.clear(); afterNumChange(); };
+  $('#frows').addEventListener('change', e => {
+    const row = e.target.closest('.frow'); if (!row) return;
+    const k = row.dataset.k, f = FMAP[k], s = S.filters[k], t = e.target.dataset.f;
+    if (t === 'on') s.on = e.target.checked;
+    else {
+      let v = Math.round(+e.target.value); if (!isFinite(v)) v = t === 'min' ? f.lo : f.hi;
+      v = Math.max(f.lo, Math.min(f.hi, v)); s[t] = v;
+      if (s.min > s.max){ if (t === 'min') s.max = s.min; else s.min = s.max; }
+      row.querySelector('[data-f="min"]').value = s.min; row.querySelector('[data-f="max"]').value = s.max;
+      s.on = true; row.querySelector('[data-f="on"]').checked = true;
+    }
+    persist(); updatePass();
+  });
+  $('#fDefault').onclick = () => { S.filters = defaultFilters(); persist(); filterRows(); toast('분석 사이트 추천 범위로 맞췄습니다'); };
+  $('#fNone').onclick = () => { FILTERS.forEach(f => S.filters[f.k].on = false); persist(); filterRows(); };
+  $('#fPast').onchange = e => { S.excludePast = e.target.checked; persist(); };
+  $('#gWeight').value = S.weight; $('#gCount').value = String(S.count);
+  $('#gWeight').onchange = e => { S.weight = e.target.value; persist(); };
+  $('#gCount').onchange = e => { S.count = +e.target.value; persist(); };
+  $('#gRun').onclick = runGenerate;
+  $('#gOut').addEventListener('click', e => {
+    const b = e.target.closest('button[data-act]'); if (!b || !S.results) return;
+    const nextR = LAST.r + 1, line = n => n.map(v => String(v).padStart(2, '0')).join(' ');
+    if (b.dataset.act === 'copy') copyText(line(S.results.list[+b.dataset.i]));
+    if (b.dataset.act === 'save'){ saveCombo(S.results.list[+b.dataset.i], `${nextR}회용 생성`); b.disabled = true; b.textContent = '저장됨'; }
+    if (b.dataset.act === 'copyall') copyText(`${nextR}회 조합\n` + S.results.list.map((n, i) => `${String.fromCharCode(65 + (i % 26))}${i >= 26 ? Math.floor(i / 26) : ''}: ${line(n)}`).join('\n'));
+    if (b.dataset.act === 'saveall'){ S.results.list.forEach(n => saveCombo(n, `${nextR}회용 생성`, true)); toast(`${S.results.list.length}개 조합을 저장했습니다`); }
+    const P = S.results.pick;
+    if (P && b.dataset.act === 'copy5') copyText(`${nextR}회 정밀 추천 5개\n` + P.picked.map(r => `${r.rank}위: ${line(r.n)}`).join('\n'));
+    if (P && b.dataset.act === 'save5'){ P.picked.forEach(r => saveCombo(r.n, `${nextR}회 정밀 추천 ${r.rank}위`, true)); toast('정밀 추천 5개를 저장했습니다'); }
+    if (P && b.dataset.act === 'p5copy') copyText(line(P.picked[+b.dataset.i].n));
+  });
+}
+function renderGenerator(){
+  if (!rendered.generator) initGenerator();
+  $('#genTitle').textContent = `번호 생성기 · 제${LAST.r + 1}회용`;
+  drawBoard(); drawHelpers(); filterRows(); drawResults();
+  if (!S.results && !S.busy) runGenerate();
+}
+const ch = new MessageChannel(), q = []; ch.port1.onmessage = () => { const f = q.shift(); if (f) f(); };
+const tick = () => new Promise(r => { q.push(r); ch.port2.postMessage(0); });
+
+/* 조건을 통과하는 조합 전체를 세면서 저장소 샘플링으로 K개를 고른다 */
+async function enumerate(K, weightMode, onProgress){
+  const pool = []; for (let v = 1; v <= 45; v++) if (!S.excl.has(v)) pool.push(v);
+  const L = pool.length, FX = new Uint8Array(L); pool.forEach((v, i) => { if (S.fixed.has(v)) FX[i] = 1; });
+  const rg = k => S.filters[k].on ? [S.filters[k].min, S.filters[k].max] : [-99, 999];
+  const [sMin, sMax] = rg('sum'), [eMin, eMax] = rg('endSum'), [oMin, oMax] = rg('odd'), [lMin, lMax] = rg('low'), [pMin, pMax] = rg('prime'),
+    [m3Min, m3Max] = rg('m3'), [m5Min, m5Max] = rg('m5'), [cpMin, cpMax] = rg('comp'), [sqMin, sqMax] = rg('sq'), [dbMin, dbMax] = rg('dbl'),
+    [coMin, coMax] = rg('corner'), [caMin, caMax] = rg('carry'), [nbMin, nbMax] = rg('neighbor'), [gMin, gMax] = rg('sameGroup'),
+    [seMin, seMax] = rg('sameEnd'), [csMin, csMax] = rg('consec'), [fMin, fMax] = rg('first'), [laMin, laMax] = rg('last'), [acMin, acMax] = rg('ac');
+  const acOn = S.filters.ac.on, skipPast = S.excludePast, prev = new Set(LAST.n);
+  const PA = new Int32Array(46), PB = new Int32Array(46), PE = new Int32Array(46), EN = new Int32Array(46);
+  for (let v = 1; v <= 45; v++){
+    PA[v] = (v & 1) | ((v <= 22 ? 1 : 0) << 3) | ((PRIME.has(v) ? 1 : 0) << 6) | ((v % 3 === 0 ? 1 : 0) << 9) | ((v % 5 === 0 ? 1 : 0) << 12) | ((isComp(v) ? 1 : 0) << 15) | ((SQUARE.has(v) ? 1 : 0) << 18) | ((DOUBLE.has(v) ? 1 : 0) << 21);
+    const nbv = !prev.has(v) && (prev.has(v - 1) || prev.has(v + 1));
+    PB[v] = (CORNER.has(v) ? 1 : 0) | ((prev.has(v) ? 1 : 0) << 3) | ((nbv ? 1 : 0) << 6) | (1 << (9 + 3 * grp(v)));
+    PE[v] = 1 << (3 * (v % 10)); EN[v] = v % 10;
+  }
+  let W = null;
+  if (weightMode !== 'uniform'){
+    const f = freqOf(recent(50), false), mx = Math.max(...f.slice(1)); W = new Float64Array(46);
+    for (let v = 1; v <= 45; v++) W[v] = weightMode === 'hot' ? f[v] + 1 : mx - f[v] + 1;
+  }
+  const pc = x => { x = x - ((x >>> 1) & 0x55555555); x = (x & 0x33333333) + ((x >>> 2) & 0x33333333); return Math.imul((x + (x >>> 4)) & 0x0F0F0F0F, 0x01010101) >>> 24; };
+  function leaf(v0, v1, v2, v3, v4, v5, e, A, B, C){
+    if (e < eMin || e > eMax) return false;
+    let x = A & 7; if (x < oMin || x > oMax) return false;
+    x = (A >>> 3) & 7; if (x < lMin || x > lMax) return false;
+    x = (A >>> 6) & 7; if (x < pMin || x > pMax) return false;
+    x = (A >>> 9) & 7; if (x < m3Min || x > m3Max) return false;
+    x = (A >>> 12) & 7; if (x < m5Min || x > m5Max) return false;
+    x = (A >>> 15) & 7; if (x < cpMin || x > cpMax) return false;
+    x = (A >>> 18) & 7; if (x < sqMin || x > sqMax) return false;
+    x = (A >>> 21) & 7; if (x < dbMin || x > dbMax) return false;
+    x = B & 7; if (x < coMin || x > coMax) return false;
+    x = (B >>> 3) & 7; if (x < caMin || x > caMax) return false;
+    x = (B >>> 6) & 7; if (x < nbMin || x > nbMax) return false;
+    let g = 0; for (let s = 9; s <= 21; s += 3){ x = (B >>> s) & 7; if (x > g) g = x; } if (g < gMin || g > gMax) return false;
+    g = 0; for (let s = 0; s <= 27; s += 3){ x = (C >>> s) & 7; if (x > g) g = x; } if (g < seMin || g > seMax) return false;
+    x = (v1 - v0 === 1) + (v2 - v1 === 1) + (v3 - v2 === 1) + (v4 - v3 === 1) + (v5 - v4 === 1); if (x < csMin || x > csMax) return false;
+    if (acOn){
+      let lo = 0, hi = 0;
+      const ds = [v1-v0, v2-v0, v3-v0, v4-v0, v5-v0, v2-v1, v3-v1, v4-v1, v5-v1, v3-v2, v4-v2, v5-v2, v4-v3, v5-v3, v5-v4];
+      for (let i = 0; i < 15; i++){ const d = ds[i]; if (d < 32) lo |= 1 << d; else hi |= 1 << (d - 32); }
+      x = pc(lo) + pc(hi) - 5; if (x < acMin || x > acMax) return false;
+    }
+    if (skipPast && WIN_KEYS.has(((((v0*64 + v1)*64 + v2)*64 + v3)*64 + v4)*64 + v5)) return false;
+    return true;
+  }
+  const res = [], keys = []; let count = 0, minI = 0;
+  function accept(v0, v1, v2, v3, v4, v5){
+    count++;
+    if (!W){
+      if (res.length < K) res.push([v0, v1, v2, v3, v4, v5]);
+      else { const j = Math.floor(Math.random() * count); if (j < K) res[j] = [v0, v1, v2, v3, v4, v5]; }
+      return;
+    }
+    const key = Math.log(Math.random()) / (W[v0] * W[v1] * W[v2] * W[v3] * W[v4] * W[v5]);
+    if (res.length < K){ res.push([v0, v1, v2, v3, v4, v5]); keys.push(key); if (res.length === K){ minI = 0; for (let i = 1; i < K; i++) if (keys[i] < keys[minI]) minI = i; } return; }
+    if (key > keys[minI]){ res[minI] = [v0, v1, v2, v3, v4, v5]; keys[minI] = key; minI = 0; for (let i = 1; i < K; i++) if (keys[i] < keys[minI]) minI = i; }
+  }
+  const totalIter = comb(L, 6) || 1; let done = 0;
+  for (let i0 = 0; i0 <= L - 6; i0++){
+    const v0 = pool[i0]; if (v0 > fMax) break;
+    const a0 = PA[v0], b0 = PB[v0], c0 = PE[v0], e0 = EN[v0];
+    if (v0 >= fMin) for (let i1 = i0 + 1; i1 <= L - 5; i1++){
+      const v1 = pool[i1], s1 = v0 + v1; if (s1 + 4 * v1 + 10 > sMax) break;
+      const a1 = a0 + PA[v1], b1 = b0 + PB[v1], c1 = c0 + PE[v1], e1 = e0 + EN[v1];
+      for (let i2 = i1 + 1; i2 <= L - 4; i2++){
+        const v2 = pool[i2], s2 = s1 + v2; if (s2 + 3 * v2 + 6 > sMax) break;
+        const a2 = a1 + PA[v2], b2 = b1 + PB[v2], c2 = c1 + PE[v2], e2 = e1 + EN[v2];
+        for (let i3 = i2 + 1; i3 <= L - 3; i3++){
+          const v3 = pool[i3], s3 = s2 + v3; if (s3 + 2 * v3 + 3 > sMax) break;
+          const a3 = a2 + PA[v3], b3 = b2 + PB[v3], c3 = c2 + PE[v3], e3 = e2 + EN[v3];
+          for (let i4 = i3 + 1; i4 <= L - 2; i4++){
+            const v4 = pool[i4], s4 = s3 + v4; if (s4 + v4 + 1 > sMax) break;
+            const a4 = a3 + PA[v4], b4 = b3 + PB[v4], c4 = c3 + PE[v4], e4 = e3 + EN[v4];
+            for (let i5 = i4 + 1; i5 < L; i5++){
+              const v5 = pool[i5], s = s4 + v5; if (s > sMax) break;
+              if (s >= sMin && v5 >= laMin && v5 <= laMax && leaf(v0, v1, v2, v3, v4, v5, e4 + EN[v5], a4 + PA[v5], b4 + PB[v5], c4 + PE[v5])) accept(v0, v1, v2, v3, v4, v5);
+              if (FX[i5]) break;
+            }
+            if (FX[i4]) break;
+          }
+          if (FX[i3]) break;
+        }
+        if (FX[i2]) break;
+      }
+      if (FX[i1]) break;
+    }
+    done += comb(L - 1 - i0, 5);
+    onProgress(done / totalIter);
+    await tick();
+    if (FX[i0]) break;
+  }
+  return { count, list: res };
+}
+async function runGenerate(){
+  if (S.busy) return;
+  const fx = S.fixed.size, pool = 45 - S.excl.size;
+  if (pool < 6){ toast('제외수가 너무 많습니다. 최소 6개 번호를 남기세요'); return; }
+  S.busy = true; const btn = $('#gRun'), prog = $('#gProg'), bar = prog.querySelector('i');
+  btn.disabled = true; btn.textContent = '계산 중…'; prog.hidden = false; bar.style.width = '0%';
+  const t0 = performance.now();
+  try {
+    const r = await enumerate(S.count, S.weight, p => { bar.style.width = (p * 100).toFixed(1) + '%'; });
+    const on = FILTERS.filter(f => S.filters[f.k].on);
+    const histPass = on.length ? DRAWS.filter(d => on.every(f => passOne(d, f.k))).length / DRAWS.length : null;
+    S.results = { count: r.count, list: r.list.map(n => n.slice().sort((a, b) => a - b)), ms: Math.round(performance.now() - t0), weight: S.weight, fx, ex: S.excl.size, histPass };
+  } finally {
+    S.busy = false; btn.disabled = false; btn.textContent = '번호 생성'; prog.hidden = true;
+  }
+  drawResults();
+}
+function drawResults(){
+  const out = $('#gOut'), R = S.results;
+  if (!R){ out.innerHTML = '<p class="empty">조건을 정하고 번호 생성을 누르세요.</p>'; return; }
+  if (!R.count){ out.innerHTML = '<p class="callout">조건을 모두 만족하는 조합이 없습니다. 고정수와 필터 조건이 서로 맞지 않는지 확인하고 범위를 넓혀 보세요.</p>'; return; }
+  const wl = { uniform: '균등 무작위', hot: '핫넘버 가중', cold: '콜드넘버 가중' }[R.weight];
+  if (R.list.length > 5 && !R.pick && window.LottoPick5) R.pick = window.LottoPick5.analyze(R.list, DRAWS, metrics);
+  const P = R.list.length > 5 ? R.pick : null, rankOf = new Map(P ? P.picked.map(r => [r.idx, r.rank]) : []), scoreOf = new Map(P ? P.rows.map(r => [r.idx, r.total]) : []);
+  const lab = i => String.fromCharCode(65 + (i % 26)) + (i >= 26 ? Math.floor(i / 26) : '');
+  const f1 = x => x.toFixed(1).replace(/\.0$/, '');
+  const pickHTML = !P ? '' : `<section class="p5" aria-label="정밀 추천 5개">
+    <header><h3>정밀 분석 추천 ${P.picked.length}개</h3><span class="hint">위 ${R.list.length}개 중에서 다시 고름 · 서로 다른 번호 ${P.covered}개 사용</span></header>
+    <p class="hint">점수 = 패턴 적합도 40% (합계·홀짝·AC 등이 역대 1등에 흔했던 정도) + 번호 흐름 25% (최근 100회 출현·번호끼리 궁합) + 인기 조합 회피 35% (생일번호만·용지 한 줄 몰림·등차 번호처럼 많은 사람이 고르는 모양 감점). 이미 고른 조합과 번호가 겹치면 1개당 ${P.weights.overlap}점을 빼고 고릅니다.</p>
+    <div>${P.picked.map((r, i) => `<div class="p5-row">
+      <span class="p5-rank">${r.rank}위<small>${lab(r.idx)}번 조합</small></span>
+      <span class="balls">${balls(r.n, 'sm', v => S.fixed.has(v) ? 'ring' : '')}</span>
+      <span class="p5-total">${f1(r.total)}<small>${Math.abs(r.adj - r.total) > 0.05 ? `겹침 감점 후 ${f1(r.adj)}` : '종합 점수'}</small></span>
+      <span class="p5-score" style="grid-column:2/-1"><span class="chip">패턴 <b>${f1(r.pattern)}</b></span><span class="chip">흐름 <b>${f1(r.flow)}</b></span><span class="chip">인기 회피 <b>${f1(r.pop)}</b></span><button class="btn small" data-act="p5copy" data-i="${i}">복사</button></span>
+      <span class="p5-why">${r.notes.map(s => `<span class="plus-n">+ ${esc(s)}</span>`).join('')}${r.warns.map(s => `<span class="minus-n">− ${esc(s)}</span>`).join('')}</span>
+    </div>`).join('')}</div>
+    <div class="toolbar"><button class="btn primary" data-act="copy5">추천 5개 복사</button><button class="btn" data-act="save5">추천 5개 저장</button></div>
+    <p class="note">이 점수는 고르는 기준을 정리한 것이며, 어떤 조합이든 1등 확률은 1/${fmt(TOTAL)}로 같습니다. 실제로 기대 당첨금에 영향을 주는 항목은 "인기 조합 회피"뿐입니다(1등이 되었을 때 나눠 갖는 사람이 줄어듦).</p>
+  </section>`;
+  out.innerHTML = `<div class="res-head"><span>조건 통과 조합 <b>${fmt(R.count)}</b>개</span><span>전체 ${fmt(TOTAL)}개 중 <b>${pct(R.count, TOTAL, 2)}</b></span><span>${wl} · ${R.ms}ms</span></div>
+    <p class="hint">이 중 하나가 1등이 될 확률은 조합마다 똑같이 1/${fmt(TOTAL)}입니다.${R.histPass != null && !R.fx && !R.ex ? ` 필터가 전체 조합의 ${pct(R.count, TOTAL)}를 남겼고, 같은 필터를 역대 1등 조합에 걸면 ${(R.histPass * 100).toFixed(1)}%가 남습니다. 두 비율이 비슷하다는 것은 필터가 당첨 확률을 바꾸지 않는다는 뜻입니다.` : ''}</p>
+    <div class="results">${R.list.map((n, i) => { const m = metrics(n, LAST.n); return `<div class="res-row${rankOf.has(i) ? ' top5' : ''}"><span class="idx">${String.fromCharCode(65 + (i % 26))}${i >= 26 ? Math.floor(i / 26) : ''}</span>
+      <span class="balls">${balls(n, 'sm', v => S.fixed.has(v) ? 'ring' : '')}</span>
+      <span class="acts"><button class="btn small" data-act="copy" data-i="${i}">복사</button><button class="btn small" data-act="save" data-i="${i}">저장</button></span>
+      <span class="meta"><span class="chip">합 <b>${m.sum}</b></span><span class="chip">홀짝 <b>${m.odd}:${6 - m.odd}</b></span><span class="chip">저고 <b>${m.low}:${6 - m.low}</b></span><span class="chip">AC <b>${m.ac}</b></span><span class="chip">끝수합 <b>${m.endSum}</b></span><span class="chip">이월 <b>${m.carry}</b></span>${scoreOf.has(i) ? `<span class="chip">점수 <b>${f1(scoreOf.get(i))}</b></span>` : ''}${rankOf.has(i) ? `<span class="pill bad">추천 ${rankOf.get(i)}위</span>` : ''}</span></div>`; }).join('')}</div>
+    <div class="toolbar"><button class="btn" data-act="copyall">전체 복사</button><button class="btn" data-act="saveall">전체 저장</button><button class="btn" data-goto="check">저장한 번호 보기</button></div>
+    ${pickHTML}`;
+}
+
+/* ---------- 고정·제외수 검증 ---------- */
+function hyper(K, j){ return comb(K, j) * comb(45 - K, 6 - j) / TOTAL; }
+function renderVerify(){
+  if (!rendered.verify){
+    $('#vFix').addEventListener('change', e => {
+      const nums = parseNums(e.target.value);
+      if (nums.length > 5) toast('고정수는 5개까지만 반영됩니다');
+      S.fixed = new Set(nums.slice(0, 5)); S.fixed.forEach(v => S.excl.delete(v)); afterNumChange();
+    });
+    $('#vExcl').addEventListener('change', e => {
+      let nums = parseNums(e.target.value);
+      if (nums.length > 39){ nums = nums.slice(0, 39); toast('최소 6개 번호는 남겨야 합니다'); }
+      S.excl = new Set(nums); S.excl.forEach(v => S.fixed.delete(v)); afterNumChange();
+    });
+    const go = r => { S.vRound = Math.max(1, Math.min(LAST.r, r)); renderVerify(); };
+    $('#vPrev').onclick = () => go(S.vRound - 1); $('#vNext').onclick = () => go(S.vRound + 1); $('#vLatest').onclick = () => go(LAST.r);
+    $('#vRound').addEventListener('change', e => go(+e.target.value || LAST.r));
+  }
+  const fx = [...S.fixed].sort((a, b) => a - b), ex = [...S.excl].sort((a, b) => a - b);
+  if (document.activeElement !== $('#vFix')) $('#vFix').value = fx.join(' ');
+  if (document.activeElement !== $('#vExcl')) $('#vExcl').value = ex.join(' ');
+  $('#vRound').value = S.vRound;
+  const d = BY_ROUND.get(S.vRound);
+  let h = `<div class="stat-line"><b>${d.r}회</b><span class="hint">${kDate(d.d)}</span><span class="balls">${balls(d.n, 'sm', v => (S.fixed.has(v) ? 'ring' : '') + (S.excl.has(v) ? ' strike' : ''))}<span class="plus">+</span>${ball(d.b, 'sm')}</span></div>`;
+  if (!fx.length && !ex.length) h += '<p class="empty">위에 고정수나 제외수를 입력하면 이 회차 결과와 비교합니다.</p>';
+  if (ex.length){
+    const hit = ex.filter(v => d.n.includes(v)), ok = ex.length - hit.length, bon = S.excl.has(d.b);
+    h += `<div class="stat-line"><span>제외수 ${ex.length}개 중</span><span class="bigstat">${ok}개 적중</span><span class="pill ${hit.length ? 'bad' : 'good'}">${hit.length ? `${hit.length}개 출현: ${hit.join(', ')}` : '모두 안 나옴'}</span>${bon ? `<span class="hint">보너스 ${d.b}번은 제외수에 포함</span>` : ''}</div>`;
+  }
+  if (fx.length){
+    const hit = fx.filter(v => d.n.includes(v));
+    h += `<div class="stat-line"><span>고정수 ${fx.length}개 중</span><span class="bigstat">${hit.length}개 출현</span><span class="pill ${hit.length ? 'good' : 'neutral'}">${hit.length ? hit.join(', ') : '출현 없음'}</span><span class="hint">무작위 기대값 ${(fx.length * 6 / 45).toFixed(2)}개</span></div>`;
+  }
+  $('#vRoundOut').innerHTML = h;
+  // 전체 백테스트
+  const n = DRAWS.length; let b = '';
+  const distTable = (K, set, title, goodFn) => {
+    const cnt = new Array(Math.min(K, 6) + 1).fill(0);
+    for (const x of DRAWS){ let m = 0; for (const v of x.n) if (set.has(v)) m++; cnt[m]++; }
+    return `<div style="display:grid;gap:6px"><h4 style="font-size:14px">${title}</h4><div class="tablewrap"><table class="tbl"><thead><tr><th>나온 개수</th><th class="n">실제 회차</th><th class="n">실제 비율</th><th class="n">무작위 이론</th></tr></thead><tbody>${cnt.map((c, j) => `<tr${goodFn(j) ? ' style="font-weight:700"' : ''}><td>${j}개</td><td class="n">${fmt(c)}</td><td class="n">${pct(c, n)}</td><td class="n">${(hyper(K, j) * 100).toFixed(1)}%</td></tr>`).join('')}</tbody></table></div></div>`;
+  };
+  if (ex.length) b += distTable(ex.length, S.excl, `제외수 ${ex.length}개: 매 회차 몇 개가 나왔나 (0개 = 완전 적중)`, j => j === 0);
+  if (fx.length) b += distTable(fx.length, S.fixed, `고정수 ${fx.length}개: 매 회차 몇 개가 나왔나`, j => j === fx.length);
+  $('#vBack').innerHTML = b ? `<div class="grid2">${b}</div><p class="note">실제 비율과 무작위 이론값이 비슷하면 그 번호 선택에 특별한 힘이 없다는 뜻입니다.</p>` : '<p class="empty">고정수나 제외수를 입력하면 1회부터 지금까지 같은 번호를 썼을 때의 결과를 계산합니다.</p>';
+  if (!$('#vStrat').innerHTML) $('#vStrat').innerHTML = strategyTable();
+}
+function strategyTable(){
+  const START = 50, rows = [
+    { name:'직전 회차 6개를 제외수로', kind:'excl' }, { name:'최근 10회 미출현 번호 전부 제외', kind:'excl' },
+    { name:'최근 10회 핫넘버 6개 고정', kind:'fix' }, { name:'장기 미출현 6개 고정', kind:'fix' }, { name:'누적 최다 출현 6개 고정', kind:'fix' },
+    { name:'직전 회차 6개 고정 (이월수 노림)', kind:'fix' },
+  ].map(r => Object.assign(r, { n:0, ok:0, theo:0, hits:0, sumK:0 }));
+  const cnt = new Array(46).fill(0), last = new Array(46).fill(0);
+  DRAWS.forEach((d, i) => {
+    if (i >= START){
+      const prev = DRAWS[i - 1].n, f10 = freqOf(DRAWS.slice(i - 10, i), false);
+      const unseen10 = []; for (let v = 1; v <= 45; v++) if (!f10[v]) unseen10.push(v);
+      const lastAt = v => last[v];
+      const hot = topBy(v => f10[v] * 1000 + lastAt(v), 6), cold = topBy(v => -lastAt(v), 6), most = topBy(v => cnt[v], 6);
+      const sets = [prev, unseen10, hot, cold, most, prev], ds = new Set(d.n);
+      sets.forEach((set, k) => {
+        const r = rows[k], m = set.filter(v => ds.has(v)).length; r.n++;
+        if (r.kind === 'excl'){ if (m === 0) r.ok++; r.theo += hyper(set.length, 0); r.sumK += set.length; }
+        else { r.hits += m; r.theo += set.length * 6 / 45; }
+      });
+    }
+    d.n.forEach(v => { cnt[v]++; last[v] = d.r; });
+  });
+  return `<div class="tablewrap"><table class="tbl"><thead><tr><th>방법</th><th>평가 기준</th><th class="n">실제</th><th class="n">무작위 이론</th><th>판정</th></tr></thead><tbody>${rows.map(r => {
+    const real = r.kind === 'excl' ? r.ok / r.n * 100 : r.hits / r.n, theo = r.kind === 'excl' ? r.theo / r.n * 100 : r.theo / r.n;
+    const diff = r.kind === 'excl' ? real - theo : (real - theo) / theo * 100;
+    const tag = Math.abs(diff) < (r.kind === 'excl' ? 3 : 8) ? ['neutral','무작위와 비슷'] : diff > 0 ? ['good','조금 나음'] : ['bad','오히려 나쁨'];
+    return `<tr><td><b>${r.name}</b>${r.kind === 'excl' && r.sumK ? `<br><span class="hint">평균 ${(r.sumK / r.n).toFixed(1)}개 제외</span>` : ''}</td><td>${r.kind === 'excl' ? '제외수가 하나도 안 나온 회차 비율' : '회차당 평균 적중 개수'}</td>
+      <td class="n"><b>${r.kind === 'excl' ? real.toFixed(1) + '%' : real.toFixed(3) + '개'}</b></td><td class="n">${r.kind === 'excl' ? theo.toFixed(1) + '%' : theo.toFixed(3) + '개'}</td><td><span class="pill ${tag[0]}">${tag[1]}</span></td></tr>`; }).join('')}</tbody></table></div>
+    <p class="note">${fmt(DRAWS.length - START)}개 회차 검증. 차이가 몇 % 수준이면 우연의 범위입니다. 어떤 선정법도 무작위 추첨보다 꾸준히 낫다는 증거는 나오지 않습니다.</p>`;
+}
+
+/* ---------- 내 번호 조회 ---------- */
+function checkCombo(n){
+  const set = new Set(n), ranks = [0,0,0,0,0,0], wins = []; let money = 0;
+  for (const d of DRAWS){
+    let m = 0; for (const v of d.n) if (set.has(v)) m++;
+    const bonus = set.has(d.b);
+    const rank = m === 6 ? 1 : m === 5 && bonus ? 2 : m === 5 ? 3 : m === 4 ? 4 : m === 3 ? 5 : 0;
+    if (rank){ ranks[rank]++; money += [0, d.w1a, d.w2a, d.w3a, d.w4a, d.w5a][rank]; wins.push({ d, rank, m, bonus }); }
+  }
+  return { ranks, wins, money, best: wins.length ? Math.min(...wins.map(w => w.rank)) : 0 };
+}
+function readInputs(){ return $$('#ckIn input').map(i => +i.value).filter(v => v >= 1 && v <= 45); }
+function saveCombo(n, note, quiet){
+  const k = n.slice().sort((a, b) => a - b).join(',');
+  if (S.saved.some(s => s.n.join(',') === k)){ if (!quiet) toast('이미 저장한 번호입니다'); return; }
+  const now = new Date();
+  S.saved.unshift({ n: n.slice().sort((a, b) => a - b), note, t: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}` });
+  persist(); if (!quiet) toast('내 번호에 저장했습니다');
+  if (S.tab === 'check') drawSaved();
+}
+function renderCheck(){
+  if (!rendered.check){
+    $('#ckIn').innerHTML = Array.from({ length: 6 }, (_, i) => `<input type="number" min="1" max="45" id="ck${i}" aria-label="${i + 1}번째 번호">`).join('');
+    $('#ckIn').addEventListener('paste', e => {
+      const nums = parseNums((e.clipboardData || window.clipboardData).getData('text'));
+      if (nums.length >= 2){ e.preventDefault(); $$('#ckIn input').forEach((inp, i) => inp.value = nums[i] || ''); }
+    });
+    $('#ckRun').onclick = () => {
+      const n = readInputs(); if (new Set(n).size !== 6){ toast('1~45 사이 서로 다른 번호 6개를 넣어 주세요'); return; }
+      showCheck(n.sort((a, b) => a - b));
+    };
+    $('#ckSave').onclick = () => { const n = readInputs(); if (new Set(n).size !== 6){ toast('번호 6개를 먼저 넣어 주세요'); return; } saveCombo(n, '직접 입력'); };
+    $('#ckRand').onclick = () => { const a = []; while (a.length < 6){ const v = 1 + Math.floor(Math.random() * 45); if (!a.includes(v)) a.push(v); } a.sort((x, y) => x - y); $$('#ckIn input').forEach((inp, i) => inp.value = a[i]); showCheck(a); };
+    $('#svList').addEventListener('click', e => {
+      const b = e.target.closest('button[data-sv]'); if (!b) return; const i = +b.dataset.i;
+      if (b.dataset.sv === 'del'){ S.saved.splice(i, 1); persist(); drawSaved(); }
+      if (b.dataset.sv === 'chk'){ const n = S.saved[i].n; $$('#ckIn input').forEach((inp, j) => inp.value = n[j]); showCheck(n); scrollTo({ top: 0, behavior: 'smooth' }); }
+      if (b.dataset.sv === 'copy') copyText(S.saved[i].n.map(v => String(v).padStart(2, '0')).join(' '));
+    });
+    let armed = false;
+    $('#svClear').onclick = e => {
+      if (!S.saved.length) return;
+      if (!armed){ armed = true; e.target.textContent = '한 번 더 누르면 삭제'; setTimeout(() => { armed = false; e.target.textContent = '전체 삭제'; }, 3000); return; }
+      armed = false; e.target.textContent = '전체 삭제'; S.saved = []; persist(); drawSaved();
+    };
+    const sample = (S.saved.length ? S.saved[0].n : topBy(v => COUNT_ALL[v], 6)).slice().sort((a, b) => a - b);
+    $$('#ckIn input').forEach((inp, i) => inp.value = sample[i]);
+    showCheck(sample, S.saved.length ? '최근 저장한 번호' : '예시 · 역대 최다 출현 6개 번호');
+  }
+  drawSaved();
+}
+function showCheck(n, label){
+  const r = checkCombo(n), m = metrics(n, LAST.n), exp = [0, 1 / TOTAL, 6 / TOTAL, 228 / TOTAL, 11115 / TOTAL, 182780 / TOTAL].map(p => p * DRAWS.length);
+  const isWin = WIN_KEYS.has(keyOf(n));
+  const big = r.wins.filter(w => w.rank <= 4).sort((a, b) => a.rank - b.rank || b.d.r - a.d.r);
+  const five = r.wins.filter(w => w.rank === 5);
+  $('#ckOut').innerHTML = `<div class="card">
+    <header><h3>조회 결과${label ? ` <span class="hint">(${label})</span>` : ''}</h3><span class="balls">${balls(n, 'sm')}</span></header>
+    ${isWin ? '<p class="callout">이 조합은 역대 1등 당첨 조합과 똑같습니다.</p>' : ''}
+    <div class="rank-tiles">${[1,2,3,4,5].map(k => `<div class="${r.ranks[k] ? 'hit' : ''}"><span>${k}등</span><b>${r.ranks[k]}</b><small>보통 ${exp[k] < 0.01 ? '≈0' : exp[k].toFixed(exp[k] < 1 ? 2 : 1)}회</small></div>`).join('')}</div>
+    <p class="stat-line"><span>1회부터 ${fmt(DRAWS.length)}주 동안 매주 이 번호로 샀다면 당첨금 합계 <b>${won(r.money)}</b></span><span class="hint">구입 비용 약 ${won(DRAWS.length * 1000)} (1게임 1,000원 기준)</span></p>
+    ${big.length ? `<div class="tablewrap"><table class="tbl"><thead><tr><th>등수</th><th>회차</th><th>당첨번호</th><th class="n">당첨금</th></tr></thead><tbody>${big.map(w => `<tr><td><b>${w.rank}등</b></td><td>${w.d.r}회 · ${w.d.d}</td><td><span class="balls">${balls(w.d.n, 'xs', v => n.includes(v) ? 'ring' : 'dim')}<span class="plus">+</span>${ball(w.d.b, 'xs', n.includes(w.d.b) ? 'ring' : 'dim')}</span></td><td class="n">${won([0, w.d.w1a, w.d.w2a, w.d.w3a, w.d.w4a, w.d.w5a][w.rank])}</td></tr>`).join('')}</tbody></table></div>` : '<p class="empty">4등 이상 당첨 이력은 없습니다.</p>'}
+    ${five.length ? `<details><summary class="hint">5등(3개 일치) ${five.length}회 보기</summary><p class="note">${five.map(w => w.d.r + '회').reverse().join(', ')}</p></details>` : ''}
+    <div class="chips">${traitList(m).map(([a, b]) => `<span class="chip">${a} <b>${b}</b></span>`).join('')}</div>
+  </div>`;
+}
+function drawSaved(){
+  $('#svTitle').textContent = `저장한 번호 (${S.saved.length}개)`;
+  $('#svList').innerHTML = S.saved.length ? S.saved.map((s, i) => { const r = checkCombo(s.n); return `<div class="saved-row"><div style="display:grid;gap:4px;min-width:0"><span class="balls">${balls(s.n, 'sm')}</span><span class="meta">${esc(s.note || '')} · ${s.t} · 역대 최고 ${r.best ? r.best + '등' : '미당첨'} · 최신 ${LAST.r}회 ${(() => { const c = s.n.filter(v => LAST.n.includes(v)).length; return c + '개 일치'; })()}</span></div>
+    <div class="toolbar"><button class="btn small" data-sv="chk" data-i="${i}">조회</button><button class="btn small" data-sv="copy" data-i="${i}">복사</button><button class="btn small" data-sv="del" data-i="${i}">삭제</button></div></div>`; }).join('')
+    : '<p class="empty">번호 생성기나 위 입력칸에서 저장한 조합이 여기에 쌓입니다. 이 브라우저에만 저장됩니다.</p>';
+}
+
+/* ---------- 가이드 ---------- */
+function renderGuide(){
+  const tbody = FILTERS.map(f => { let c = 0, t = 0; for (const d of DRAWS){ if (d.m[f.k] == null) continue; t++; const x = d.m[f.k]; if (x >= f.def[0] && x <= f.def[1]) c++; }
+    return `<tr><td><b>${f.name}</b></td><td style="white-space:normal;min-width:16em">${f.tip}</td><td>${f.tapa}</td><td>${f.book}</td><td class="mono">${f.def[0]}~${f.def[1]}</td><td class="n">${pct(c, t)}</td></tr>`; }).join('');
+  $('#gdTable').innerHTML = tbody;
+  const maxWin = DRAWS.reduce((a, x) => x.w1c > a.w1c ? x : a), max2 = DRAWS.reduce((a, x) => x.w2c > a.w2c ? x : a);
+  $('#gdShared').textContent = `실제로 ${maxWin.r}회(${maxWin.n.join('·')})는 1등이 ${maxWin.w1c}명 나와 1인당 ${won(maxWin.w1a)}에 그쳤고, ${max2.r}회(${max2.n.join('·')})는 2등이 ${fmt(max2.w2c)}명 나왔습니다.`;
+}
+
+/* ---------- 채팅으로 명령 ---------- */
+const chat = { turns: [], busy: false, ctl: null, sample: null, tools: true };
+const chatLog = $('#chatLog'), chatIn = $('#chatIn');
+const WEIGHT_LABEL = { uniform: '균등 무작위', hot: '최근 50회 핫넘버 가중', cold: '최근 50회 콜드넘버 가중' };
+const sortNums = s => [...s].sort((a, b) => a - b);
+function addMsg(cls, text){ const d = document.createElement('div'); d.className = 'msg ' + cls; d.textContent = text; chatLog.appendChild(d); chatLog.scrollTop = chatLog.scrollHeight; return d; }
+function stateSummary(){
+  const on = FILTERS.filter(f => S.filters[f.k].on).map(f => `${f.name} ${S.filters[f.k].min}~${S.filters[f.k].max}`);
+  return `다음 추첨: 제${LAST.r + 1}회 / 직전 ${LAST.r}회 당첨번호 ${LAST.n.join(' ')} + 보너스 ${LAST.b}\n` +
+    `고정수: ${sortNums(S.fixed).join(' ') || '없음'} / 제외수: ${sortNums(S.excl).join(' ') || '없음'}\n` +
+    `생성 개수 ${S.count}개, 방식 ${WEIGHT_LABEL[S.weight]}, 역대 1등 조합 제외 ${S.excludePast ? '켬' : '끔'}\n켜진 필터: ${on.join(', ') || '없음'}`;
+}
+function syncGenUI(){
+  const sel = $('#gCount');
+  if (![...sel.options].some(o => +o.value === S.count)){ const o = document.createElement('option'); o.textContent = String(S.count); sel.appendChild(o); }
+  sel.value = String(S.count); $('#gWeight').value = S.weight; $('#fPast').checked = S.excludePast;
+  persist(); filterRows();
+  if (S.tab === 'generator'){ drawBoard(); drawHelpers(); }
+  if (S.tab === 'verify') renderVerify();
+}
+/* 고정·제외 변경 — 바뀐 내용과 거절 사유를 돌려준다 */
+function applyNums({ addFix = [], removeFix = [], addExcl = [], removeExcl = [], clearFix = false, clearExcl = false }){
+  const notes = [], ok = v => Number.isInteger(v) && v >= 1 && v <= 45;
+  if (clearFix) S.fixed.clear();
+  if (clearExcl) S.excl.clear();
+  removeFix.map(Number).filter(ok).forEach(v => S.fixed.delete(v));
+  removeExcl.map(Number).filter(ok).forEach(v => S.excl.delete(v));
+  for (const v of addExcl.map(Number).filter(ok)){
+    if (S.excl.has(v)) continue;
+    if (45 - S.excl.size - 1 < 6){ notes.push(`${v}번은 제외하지 못함(최소 6개는 남겨야 함)`); continue; }
+    S.fixed.delete(v); S.excl.add(v);
+  }
+  for (const v of addFix.map(Number).filter(ok)){
+    if (S.fixed.has(v)) continue;
+    if (S.fixed.size >= 5){ notes.push(`${v}번은 고정하지 못함(고정수는 최대 5개)`); continue; }
+    S.excl.delete(v); S.fixed.add(v);
+  }
+  S.results = null; syncGenUI();
+  return { fixed: sortNums(S.fixed), excluded: sortNums(S.excl), notes };
+}
+function applyFilters({ changes = [], reset = false, allOff = false }){
+  const notes = [];
+  if (reset) S.filters = defaultFilters();
+  if (allOff) FILTERS.forEach(f => S.filters[f.k].on = false);
+  for (const c of changes){
+    const f = FMAP[c.key]; if (!f){ notes.push(`알 수 없는 필터: ${c.key}`); continue; }
+    const s = S.filters[f.k];
+    if (c.on != null) s.on = !!c.on;
+    if (c.min != null && isFinite(+c.min)) { s.min = Math.max(f.lo, Math.min(f.hi, Math.round(+c.min))); s.on = c.on != null ? !!c.on : true; }
+    if (c.max != null && isFinite(+c.max)) { s.max = Math.max(f.lo, Math.min(f.hi, Math.round(+c.max))); s.on = c.on != null ? !!c.on : true; }
+    if (s.min > s.max) [s.min, s.max] = [s.max, s.min];
+  }
+  S.results = null; syncGenUI();
+  return { filters: FILTERS.filter(f => S.filters[f.k].on).map(f => ({ key: f.k, name: f.name, min: S.filters[f.k].min, max: S.filters[f.k].max })), notes };
+}
+function applyOptions({ count, weight, excludePast }){
+  if (count != null && isFinite(+count)) S.count = Math.max(1, Math.min(50, Math.round(+count)));
+  if (weight && WEIGHT_LABEL[weight]) S.weight = weight;
+  if (excludePast != null) S.excludePast = !!excludePast;
+  S.results = null; syncGenUI();
+  return { count: S.count, weight: S.weight, excludePast: S.excludePast };
+}
+function candidates(){
+  const prevSet = new Set(LAST.n), nb = [];
+  for (let v = 1; v <= 45; v++) if (!prevSet.has(v) && (prevSet.has(v - 1) || prevSet.has(v + 1))) nb.push(v);
+  const f10 = freqOf(recent(10), false), f50 = freqOf(recent(50), false), f100 = freqOf(recent(100), false);
+  return {
+    lastDraw: LAST.n, bonus: LAST.b, neighbors: nb,
+    hot10: topBy(v => f10[v] * 1000 + LAST_SEEN[v], 7), cold50: topBy(v => f50[v], 7, false), hot100: topBy(v => f100[v], 7),
+    longestGap: topBy(gapOf, 7).map(v => ({ n: v, gap: gapOf(v) })), mostOverall: topBy(v => COUNT_ALL[v], 7),
+  };
+}
+async function generateNow(){
+  if (S.busy) await new Promise(r => { const t = setInterval(() => { if (!S.busy){ clearInterval(t); r(); } }, 100); });
+  S.results = null;
+  await runGenerate();
+  const R = S.results; if (!R) throw new Error('생성하지 못했습니다');
+  if (R.count && R.list.length > 5 && !R.pick && window.LottoPick5) R.pick = window.LottoPick5.analyze(R.list, DRAWS, metrics);
+  if (S.tab === 'generator') drawResults();
+  showResultCard();
+  return R;
+}
+const labelOf = i => String.fromCharCode(65 + (i % 26)) + (i >= 26 ? Math.floor(i / 26) : '');
+function showResultCard(){
+  const R = S.results; if (!R) return;
+  const d = document.createElement('div'); d.className = 'msg res';
+  if (!R.count){ d.textContent = '조건을 모두 만족하는 조합이 없습니다. 필터나 고정수를 풀어 보세요.'; chatLog.appendChild(d); return; }
+  const P = R.pick, top = new Map(P ? P.picked.map(r => [r.idx, r.rank]) : []);
+  d.innerHTML = `<h4>제${LAST.r + 1}회 · ${WEIGHT_LABEL[R.weight]} ${R.list.length}개 (조건 통과 ${fmt(R.count)}개 중)</h4>` +
+    R.list.map((n, i) => `<div class="r${top.has(i) ? ' top' : ''}"><b>${labelOf(i)}${top.has(i) ? '·' + top.get(i) + '위' : ''}</b><span class="balls">${balls(n, 'xs', v => S.fixed.has(v) ? 'ring' : '')}</span></div>`).join('') +
+    (P ? `<h4 style="margin-top:6px">정밀 추천 5개</h4>` + P.picked.map(r => `<div class="r top"><b>${r.rank}위</b><span class="balls">${balls(r.n, 'xs')}</span><span class="hint">${labelOf(r.idx)} · ${r.total.toFixed(1)}점</span></div>`).join('') : '') +
+    `<div class="acts">${P ? '<button class="btn small" data-c="copy5">추천 5개 복사</button><button class="btn small" data-c="save5">추천 5개 저장</button>' : ''}<button class="btn small" data-c="copyall">전체 복사</button><button class="btn small" data-c="open">생성기에서 보기</button></div>`;
+  d._R = R; chatLog.appendChild(d); chatLog.scrollTop = chatLog.scrollHeight;
+}
+chatLog.addEventListener('click', e => {
+  const b = e.target.closest('button[data-c]'); if (!b) return;
+  const R = b.closest('.msg')._R; if (!R) return;
+  const nextR = LAST.r + 1, line = n => n.map(v => String(v).padStart(2, '0')).join(' ');
+  if (b.dataset.c === 'copy5') copyText(`${nextR}회 정밀 추천 5개\n` + R.pick.picked.map(r => `${r.rank}위: ${line(r.n)}`).join('\n'));
+  if (b.dataset.c === 'save5'){ R.pick.picked.forEach(r => saveCombo(r.n, `${nextR}회 정밀 추천 ${r.rank}위`, true)); toast('정밀 추천 5개를 저장했습니다'); }
+  if (b.dataset.c === 'copyall') copyText(`${nextR}회 조합\n` + R.list.map((n, i) => `${labelOf(i)}: ${line(n)}`).join('\n'));
+  if (b.dataset.c === 'open'){ if (S.results !== R) S.results = R; showTab('generator'); setTimeout(() => $('#gOut').scrollIntoView({ block: 'start' }), 50); }
+});
+
+/* 빠른 명령: 뜻이 분명한 짧은 명령은 Claude 없이 바로 처리 */
+function quickParse(text){
+  const clauses = text.replace(/[!?~]/g, ' ').split(/\s*(?:,|，|\.|\n|그리고|하고\s|하구\s|후에?\s|다음에?\s)\s*/).map(s => s.trim()).filter(Boolean);
+  const acts = []; let gen = null;
+  for (let c of clauses){
+    c = c.replace(/\s*(해\s*줘|해\s*주세요|해라|하자|해|좀|주세요|줘)$/g, '').trim();
+    let m;
+    if ((m = c.match(/^((?:\d{1,2}\s*(?:번|,|\s)*\s*)+)(?:을|를|은|는)?\s*(고정|제외|빼|빼기|넣)/))){
+      const nums = parseNums(m[1]); if (!nums.length) return null;
+      acts.push({ t: /제외|빼/.test(m[2]) ? 'excl' : 'fix', nums }); continue;
+    }
+    if ((m = c.match(/^(?:직전|지난|이전|저번)\s*(?:회차|주|회)?\s*(?:당첨)?\s*(?:번호)?\s*(?:6개|여섯\s*개)?\s*(?:를|을)?\s*(?:모두|전부|다)?\s*(제외|빼|고정)/))){
+      acts.push({ t: m[1] === '고정' ? 'fix' : 'excl', nums: LAST.n.slice(0, m[1] === '고정' ? 5 : 6) }); continue;
+    }
+    if ((m = c.match(/^(고정|제외)\s*(?:수)?\s*((?:\d{1,2}\s*(?:번|,|\s)*\s*)+)$/))){ acts.push({ t: m[1] === '제외' ? 'excl' : 'fix', nums: parseNums(m[2]) }); continue; }
+    if ((m = c.match(/^((?:\d{1,2}\s*(?:번|,|\s)*\s*)+)(?:을|를)?\s*(고정|제외)(?:수)?(?:에서)?\s*(풀|해제|빼)/))){ acts.push({ t: m[2] === '제외' ? 'unexcl' : 'unfix', nums: parseNums(m[1]) }); continue; }
+    if (/^(고정\s*(수)?\s*(와|랑|,)?\s*제외\s*(수)?|모두|전부|다)\s*(모두|전부|다)?\s*(비우|비워|지워|초기화|해제|없애)/.test(c)){ acts.push({ t: 'clearAll' }); continue; }
+    if (/^고정\s*(수)?\s*(을|를)?\s*(모두|전부|다)?\s*(비우|비워|지워|초기화|해제|없애)/.test(c)){ acts.push({ t: 'clearFix' }); continue; }
+    if (/^제외\s*(수)?\s*(를|을)?\s*(모두|전부|다)?\s*(비우|비워|지워|초기화|해제|없애)/.test(c)){ acts.push({ t: 'clearExcl' }); continue; }
+    if (/^(필터|조건)\s*(을|를)?\s*(추천값|기본값|초기화|원래대로)/.test(c)){ acts.push({ t: 'resetFilters' }); continue; }
+    if ((m = c.match(/^(?:(핫\s*넘버|콜드\s*넘버|균등|무작위)\s*(?:가중)?\s*(?:으로|로)?\s*)?(?:번호\s*)?(?:(\d{1,2})\s*개\s*(?:를|을)?\s*)?(?:번호\s*)?(생성|만들어|만들|뽑아|뽑|추천)/))){
+      if (m[1]) acts.push({ t: 'weight', w: /핫/.test(m[1]) ? 'hot' : /콜드/.test(m[1]) ? 'cold' : 'uniform' });
+      if (m[2]) acts.push({ t: 'count', n: +m[2] });
+      gen = true; continue;
+    }
+    if ((m = c.match(/^(핫\s*넘버|콜드\s*넘버|균등\s*무작위|균등)\s*(?:가중)?\s*(?:으로|로)?\s*(?:바꿔|변경|설정)?$/))){ acts.push({ t: 'weight', w: /핫/.test(m[1]) ? 'hot' : /콜드/.test(m[1]) ? 'cold' : 'uniform' }); continue; }
+    if ((m = c.match(/^(\d{1,2})\s*개\s*(?:로|씩)?\s*(?:바꿔|변경|설정)?$/))){ acts.push({ t: 'count', n: +m[1] }); continue; }
+    return null; // 하나라도 모르는 말이 있으면 Claude에게 넘김
+  }
+  if (!acts.length && !gen) return null;
+  return { acts, gen };
+}
+async function runQuick(q){
+  const lines = [];
+  for (const a of q.acts){
+    if (a.t === 'fix' || a.t === 'excl'){ const r = applyNums(a.t === 'fix' ? { addFix: a.nums } : { addExcl: a.nums }); lines.push(`${a.nums.join(' ')} ${a.t === 'fix' ? '고정' : '제외'}`); lines.push(...r.notes); }
+    if (a.t === 'unfix' || a.t === 'unexcl'){ applyNums(a.t === 'unfix' ? { removeFix: a.nums } : { removeExcl: a.nums }); lines.push(`${a.nums.join(' ')} ${a.t === 'unfix' ? '고정 해제' : '제외 해제'}`); }
+    if (a.t === 'clearAll'){ applyNums({ clearFix: true, clearExcl: true }); lines.push('고정수·제외수를 모두 비움'); }
+    if (a.t === 'clearFix'){ applyNums({ clearFix: true }); lines.push('고정수를 비움'); }
+    if (a.t === 'clearExcl'){ applyNums({ clearExcl: true }); lines.push('제외수를 비움'); }
+    if (a.t === 'resetFilters'){ applyFilters({ reset: true }); lines.push('필터를 분석 사이트 추천값으로 되돌림'); }
+    if (a.t === 'weight'){ applyOptions({ weight: a.w }); lines.push(`방식: ${WEIGHT_LABEL[a.w]}`); }
+    if (a.t === 'count'){ applyOptions({ count: a.n }); lines.push(`개수: ${S.count}개`); }
+  }
+  lines.push(`→ 고정수 ${sortNums(S.fixed).join(' ') || '없음'} / 제외수 ${sortNums(S.excl).join(' ') || '없음'}`);
+  addMsg('bot', lines.join('\n'));
+  if (q.gen){ const th = addMsg('bot thinking', '번호 만드는 중…'); try { await generateNow(); th.remove(); } catch (e) { th.textContent = '생성하지 못했습니다.'; } }
+}
+
+/* Claude가 부를 수 있는 페이지 기능 */
+const CHAT_TOOLS = [
+  { name: 'get_state', description: '지금 생성기 설정(고정수, 제외수, 개수, 방식, 켜진 필터와 범위, 직전 회차)을 돌려준다. 필터 키 목록도 포함.',
+    execute: () => ({ summary: stateSummary(), filterKeys: FILTERS.map(f => ({ key: f.k, name: f.name, on: S.filters[f.k].on, min: S.filters[f.k].min, max: S.filters[f.k].max, allowed: `${f.lo}~${f.hi}` })) }) },
+  { name: 'number_candidates', description: '고정수·제외수 후보 목록을 돌려준다: 직전 회차 번호(lastDraw), 보너스, 이웃수(직전 번호 ±1), 최근 10회 핫넘버(hot10), 최근 100회 다출현(hot100), 최근 50회 콜드넘버(cold50), 장기 미출현(longestGap), 역대 최다 출현(mostOverall). numbers를 주면 그 번호별 최근 10/50/100회 출현 수와 미출현 회차도 준다.',
+    inputSchema: { type: 'object', properties: { numbers: { type: 'array', items: { type: 'integer' } } } },
+    execute: (inp) => { const c = candidates(); const nums = Array.isArray(inp.numbers) ? inp.numbers.map(Number).filter(v => v >= 1 && v <= 45) : [];
+      if (nums.length){ const f10 = freqOf(recent(10)), f50 = freqOf(recent(50)), f100 = freqOf(recent(100)); c.stats = nums.map(v => ({ n: v, r10: f10[v], r50: f50[v], r100: f100[v], total: COUNT_ALL[v], gap: gapOf(v) })); }
+      return c; } },
+  { name: 'set_numbers', description: '고정수(반드시 넣을 번호, 최대 5개)와 제외수(뺄 번호)를 바꾼다. 결과로 바뀐 고정수·제외수와 거절된 번호 사유를 돌려준다. 바꾸면 이전 생성 결과는 지워진다.',
+    inputSchema: { type: 'object', properties: { add_fixed: { type: 'array', items: { type: 'integer' } }, remove_fixed: { type: 'array', items: { type: 'integer' } }, add_excluded: { type: 'array', items: { type: 'integer' } }, remove_excluded: { type: 'array', items: { type: 'integer' } }, clear_fixed: { type: 'boolean' }, clear_excluded: { type: 'boolean' } } },
+    execute: (i) => applyNums({ addFix: i.add_fixed || [], removeFix: i.remove_fixed || [], addExcl: i.add_excluded || [], removeExcl: i.remove_excluded || [], clearFix: !!i.clear_fixed, clearExcl: !!i.clear_excluded }) },
+  { name: 'set_filters', description: '조합 조건(필터)을 바꾼다. changes의 key는 get_state의 filterKeys 중 하나(sum 합계, odd 홀수 개수, low 저번호(1~22) 개수, ac AC값, endSum 끝수합, consec 연번 쌍, sameEnd 동끝수, sameGroup 한 번호대 최대, prime 소수, m3, m5, comp, sq, dbl, corner, first 첫 번호, last 끝 번호, carry 이월수, neighbor 이웃수). min/max를 주면 그 필터가 켜진다. reset=true면 추천값으로, all_off=true면 전부 끈다.',
+    inputSchema: { type: 'object', properties: { changes: { type: 'array', items: { type: 'object', properties: { key: { type: 'string' }, on: { type: 'boolean' }, min: { type: 'integer' }, max: { type: 'integer' } }, required: ['key'] } }, reset: { type: 'boolean' }, all_off: { type: 'boolean' } } },
+    execute: (i) => applyFilters({ changes: Array.isArray(i.changes) ? i.changes : [], reset: !!i.reset, allOff: !!i.all_off }) },
+  { name: 'set_options', description: '생성 개수(1~50, 보통 10), 방식(uniform 균등 무작위 / hot 최근 50회 핫넘버 가중 / cold 콜드넘버 가중), 역대 1등 조합 제외 여부를 바꾼다.',
+    inputSchema: { type: 'object', properties: { count: { type: 'integer' }, weight: { type: 'string', enum: ['uniform', 'hot', 'cold'] }, exclude_past: { type: 'boolean' } } },
+    execute: (i) => applyOptions({ count: i.count, weight: i.weight, excludePast: i.exclude_past }) },
+  { name: 'generate', description: '지금 설정으로 조건을 통과하는 조합 전체를 세고 개수만큼 무작위로 뽑은 뒤, 6개 이상이면 그중 정밀 추천 5개를 고른다. 결과는 채팅과 화면에 카드로 자동 표시되므로 답변에서 번호를 다시 나열할 필요는 없다. 돌려주는 값: 통과 조합 수, 조합 목록, 추천 5개와 점수·이유.',
+    execute: async () => { const R = await generateNow(); if (!R.count) return { passCount: 0, message: '조건을 만족하는 조합이 없음' };
+      return { passCount: R.count, combos: R.list.map((n, i) => ({ label: labelOf(i), numbers: n })),
+        top5: R.pick ? R.pick.picked.map(r => ({ rank: r.rank, label: labelOf(r.idx), numbers: r.n, score: +r.total.toFixed(1), good: r.notes, caution: r.warns })) : [] }; } },
+];
+const CHAT_RULES = `너는 "로또 6/45 분석기" 웹페이지 안의 도우미다. 사용자의 한국어 명령을 듣고 도구로 이 페이지의 번호 생성기를 직접 조작한다.
+규칙:
+- 설정을 바꾸라는 말이면 set_numbers / set_filters / set_options 로 바로 바꾼다. "뽑아줘·만들어줘·추천해줘·생성"이면 필요한 설정을 바꾼 뒤 generate 를 부른다.
+- "직전 회차 번호", "핫넘버", "장기 미출현" 같은 말은 number_candidates 로 실제 번호를 확인해서 쓴다. 번호를 지어내지 않는다.
+- 현재 설정이 필요하면 get_state 를 부른다. 아래 [현재 설정]은 이 메시지를 보낼 때의 값이다.
+- 답은 한국어로 짧게(2~5줄): 무엇을 바꿨는지, 결과 요약. generate 결과 번호는 카드로 이미 보이므로 다시 나열하지 말고 추천 1위 정도만 언급해도 된다.
+- 어떤 조합이든 1등 확률은 1/8,145,060로 같다. 확률이 오른다고 말하지 않는다. 묻는 질문(통계·용어 설명)에는 도구 없이 답해도 된다.
+- 로또 분석기와 관계없는 일은 정중히 짧게 거절한다.`;
+
+async function sendChat(text){
+  text = text.trim(); if (!text || chat.busy) return;
+  addMsg('me', text); chatIn.value = '';
+  const q = quickParse(text);
+  if (q && !(q.acts.length === 0 && /\?|왜|뭐|어떻게|알려/.test(text))){ await runQuick(q); return; }
+  if (!chat.sample || !chat.tools){
+    addMsg('bot', '이 화면에서는 Claude에게 물어볼 수 없어 짧은 명령만 알아들어요.\n예: "7 13 고정", "1 4 9 제외", "고정수 비워줘", "핫넘버로 20개 뽑아줘", "필터 추천값으로"');
+    return;
+  }
+  chat.busy = true; $('#chatSend').disabled = true; $('#chatStop').hidden = false;
+  chat.turns.push({ role: 'user', content: text });
+  while (chat.turns.length > 12) chat.turns.shift();
+  if (chat.turns[0].role !== 'user') chat.turns.shift();
+  const bubble = addMsg('bot thinking', '생각하는 중…');
+  chat.ctl = new AbortController();
+  try {
+    const { text: ans } = await chat.sample([{ role: 'user', content: CHAT_RULES + '\n\n[현재 설정]\n' + stateSummary() }, ...chat.turns], {
+      modelTier: 'quick', tools: CHAT_TOOLS, signal: chat.ctl.signal,
+      onText: ({ text: t }) => { bubble.classList.remove('thinking'); bubble.textContent = t; chatLog.scrollTop = chatLog.scrollHeight; },
+    });
+    bubble.classList.remove('thinking'); bubble.textContent = ans;
+    chatLog.appendChild(bubble); // 결과 카드 뒤로 답을 옮김
+    chatLog.scrollTop = chatLog.scrollHeight;
+    chat.turns.push({ role: 'assistant', content: ans });
+  } catch (e) {
+    const code = e && e.code;
+    if (code === 'cancelled'){ bubble.textContent = (e.text || '') + (e.text ? '\n' : '') + '(멈춤)'; }
+    else if (code === 'not_granted' || code === 'sampling_disabled' || code === 'not_declared' || code === 'capability_disabled' || code === 'capability_removed' || code === 'tools_unavailable'){
+      chat.sample = null; bubble.textContent = 'Claude 연결이 허용되지 않아 짧은 명령만 처리할 수 있어요.\n예: "7 13 고정", "1 4 9 제외", "10개 뽑아줘"'; setChatMode();
+    }
+    else if (code === 'rate_limited') bubble.textContent = '요청이 많아 잠시 쉬어야 해요. 조금 뒤 다시 보내 주세요.';
+    else if (code === 'refused') bubble.textContent = '이 요청은 처리할 수 없어요. 다르게 말해 주세요.';
+    else bubble.textContent = (e && e.text ? e.text + '\n' : '') + '연결이 끊겼어요. 다시 보내 주세요.';
+    bubble.classList.remove('thinking');
+    chat.turns.pop();
+  } finally {
+    chat.busy = false; $('#chatSend').disabled = false; $('#chatStop').hidden = true; chat.ctl = null;
+  }
+}
+function setChatMode(){ $('#chatMode').textContent = chat.sample ? '자유롭게 말하면 Claude가 설정을 바꾸고 번호를 만듭니다' : '짧은 명령을 바로 처리합니다 (예: 7 13 고정, 10개 뽑아줘)'; }
+function openChat(open){
+  $('#chatPanel').hidden = !open; $('#chatFab').setAttribute('aria-expanded', String(open));
+  if (open){
+    if (!chatLog.children.length) addMsg('sys', `제${LAST.r + 1}회용 번호 생성기를 채팅으로 조작합니다. 말한 내용은 화면 설정에 바로 반영돼요.\n\n${stateSummary()}`);
+    setTimeout(() => chatIn.focus(), 30);
+  }
+}
+$('#chatFab').onclick = () => openChat(true);
+$('#chatClose').onclick = () => openChat(false);
+$('#chatStop').onclick = () => chat.ctl && chat.ctl.abort();
+$('#chatForm').addEventListener('submit', e => { e.preventDefault(); sendChat(chatIn.value); });
+chatIn.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing){ e.preventDefault(); sendChat(chatIn.value); } });
+$('#chatEx').addEventListener('click', e => { const b = e.target.closest('button[data-ex]'); if (b) sendChat(b.dataset.ex); });
+setChatMode();
+if (window.claude && typeof window.claude.use === 'function'){
+  window.claude.use('sample').then(async s => {
+    if (!s) return;
+    const lim = await s.limits().catch(() => null);
+    chat.tools = !lim || !!lim.tools; chat.sample = chat.tools ? s : null; setChatMode();
+  }).catch(() => {});
+}
+
+const RENDER = { home: renderHome, history: renderHistory, stats: renderStats, patterns: renderPatterns, generator: renderGenerator, verify: renderVerify, check: renderCheck, guide: renderGuide };
+$('#dataInfo').textContent = `1회 ~ ${LAST.r}회 당첨번호 (${LAST.d} 추첨까지) · 데이터 갱신 ${RAW.updated}`;
+const start = (location.hash || '').replace('#', '');
+showTab(TABS.includes(start) ? start : 'home', false);
+})();
+</script>
