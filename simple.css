@@ -36,3 +36,8 @@ body.simple #tab-manual > .sg{display:grid;gap:18px;max-width:720px;width:100%;m
 .sg-run + .sg-run{margin-top:8px}
 .sg-run summary{cursor:pointer;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .sg-runbar{margin:6px 0}
+.sg-done{border:1.5px solid var(--slip)}
+.sg-dgroup{border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.sg-dgroup.off{opacity:.5}
+.sg-dhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.sg-dhead .seg{margin-left:auto}

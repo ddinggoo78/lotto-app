@@ -75,9 +75,9 @@ window.LottoSimple = function (A) {
     </div>
     <div class="card" id="sgTrayCard">
       <header><h3>④ 고른 조합 <span id="sgTrayN"></span></h3><button class="btn small" id="sgTrayClear">비우기</button></header>
-      <p class="hint">③에서 고른 조합(수동번호 생성기에서 담은 것 포함)이 여기에 모여요. 10개까지 고르고 확정하세요.</p>
+      <p class="hint">③에서 고른 조합(수동번호 생성기에서 담은 것 포함)이 여기에 모여요. 10개까지 고른 뒤 정밀 추천 5개를 뽑으세요.</p>
       <div id="sgTray"></div>
-      <div class="toolbar"><button class="btn" id="sgAutoFill">점수 높은 순으로 채우기</button><button class="btn primary" id="sgConfirm">최종 확정 → 정밀 추천 5개</button></div>
+      <div class="toolbar"><button class="btn" id="sgAutoFill">점수 높은 순으로 채우기</button><button class="btn primary" id="sgConfirm">정밀 추천 5개 뽑기</button></div>
     </div>
     <div id="sgFinal"></div>`;
   let cur = null;   // 가장 최근에 만든 10개
@@ -173,6 +173,7 @@ window.LottoSimple = function (A) {
   });
   $('#sgRunsClear').onclick = () => { runs.length = 0; cur = null; drawList(); };
   function drawTray() {
+    if (typeof drawDone === 'function' && document.getElementById('doneCard')) drawDone();
     $('#sgTrayN').textContent = `(${tray.length}/10)`;
     $('#sgTray').innerHTML = tray.length ? tray.map((t, i) => `<div class="sg-trow"><span class="balls">${balls(t.n, 'sm')}</span><span class="hint">${t.score.toFixed(1)}점 · ${WL[t.w]}</span><button class="btn small" data-rm="${i}">빼기</button></div>`).join('')
       : '<p class="empty">아직 고른 조합이 없어요.</p>';
@@ -200,17 +201,11 @@ window.LottoSimple = function (A) {
 
   $('#sgConfirm').onclick = () => {
     if (!tray.length) return;
-    const ds = today(), picks = pick5(tray.map(t => t.n));
-    let rec = S.days.find(d => d.date === ds && d.round === NEXT);
-    if (!rec) { rec = { date: ds, round: NEXT, sets: [] }; S.days.push(rec); }
-    rec.sets.push({ t: new Date().toTimeString().slice(0, 5), combos: tray.map(t => t.n), src: tray.map(t => t.w === 'manual' ? 'm' : 'a'), picks: picks.map(p => p.n) });
-    persist();
-    lastPicks.gen = picks;
-    $('#sgFinal').innerHTML = picksHTML(picks, `정밀 추천 5개 · ${dayLabel(ds)} 저장됨`, 'gen') +
-      `<p class="hint">「내 번호 조회」에서 날짜별로 다시 보고, 여러 날을 모아 다시 5개로 추릴 수 있어요.</p>`;
-    tray.length = 0; drawTray(); drawList();
+    const picks = pick5(tray.map(t => t.n));
+    lastPicks.gen = picks; doneTouch('gen');
+    $('#sgFinal').innerHTML = picksHTML(picks, '정밀 추천 5개', 'gen') + '<p class="hint">맨 아래 ⑥에서 적용할 것을 고르고 「확인」을 누르면 내 번호 조회에 저장돼요.</p>';
+    drawDone();
     $('#sgFinal').scrollIntoView({ behavior: 'smooth', block: 'start' });
-    toast('최종 조합과 추천 5개를 저장했어요');
   };
 
 
@@ -276,8 +271,8 @@ window.LottoSimple = function (A) {
 
   /* ---------- 3-3) 자동번호 생성기 안: 저장한 날짜 모아 다시 5개로 ---------- */
   const reCard = document.createElement('div'); reCard.className = 'card'; reCard.id = 'reCard';
-  reCard.innerHTML = `<header><h3>④ 저장한 날짜 모아 다시 5개로</h3><div class="toolbar"><button class="btn small" id="reAll">전체 선택</button><button class="btn small" id="reNone">선택 해제</button></div></header>
-    <p class="hint">제${NEXT}회용으로 확정한 날짜를 하나·여러 개·전체 골라, 그 번호들을 모아 다시 정밀 추천 5개로 추려요. 결과는 오늘 날짜로 저장돼요.</p>
+  reCard.innerHTML = `<header><h3>⑤ 저장한 날짜 모아 다시 5개로</h3><div class="toolbar"><button class="btn small" id="reAll">전체 선택</button><button class="btn small" id="reNone">선택 해제</button></div></header>
+    <p class="hint">제${NEXT}회용으로 저장한 날짜를 하나·여러 개·전체 골라, 그 번호들을 모아 다시 정밀 추천 5개로 추려요.</p>
     <div class="chips sc-days" id="reDays"></div>
     <div class="toolbar"><label class="hint"><input type="radio" name="reSrc" value="all" checked> 확정한 조합 전부</label><label class="hint"><input type="radio" name="reSrc" value="picks"> 그날 추천 5개만</label>
       <button class="btn primary" id="reRun">5개로 다시 추리기</button></div>
@@ -289,7 +284,7 @@ window.LottoSimple = function (A) {
     for (const d of [...reSel]) if (!days.some(x => x.date === d)) reSel.delete(d);
     if (!reSel.size && !reTouched) days.forEach(d => reSel.add(d.date));
     $('#reDays').innerHTML = days.length ? days.map(d => `<button class="chip sc-day${reSel.has(d.date) ? ' on' : ''}" data-d="${d.date}">${dayLabel(d.date)} · ${d.sets.filter(x => !x.re).reduce((a, x) => a + x.combos.length, 0)}개</button>`).join('')
-      : '<span class="empty">아직 확정한 날이 없어요. 위에서 「최종 확정」을 하면 날짜가 생겨요.</span>';
+      : '<span class="empty">아직 저장한 날이 없어요. ⑥에서 「확인」을 하면 날짜가 생겨요.</span>';
   }
   reCard.addEventListener('click', e => { const c = e.target.closest('.sc-day'); if (c) { reTouched = true; reSel.has(c.dataset.d) ? reSel.delete(c.dataset.d) : reSel.add(c.dataset.d); drawRe(); } });
   $('#reAll').onclick = () => { S.days.filter(d => d.round === NEXT).forEach(d => reSel.add(d.date)); drawRe(); };
@@ -301,17 +296,64 @@ window.LottoSimple = function (A) {
     const pool = days.flatMap(d => d.sets.filter(x => !x.re).flatMap(x => src === 'picks' ? x.picks : x.combos));
     if (!pool.length) { toast('고른 날짜에 추천 5개가 없어요. 「확정한 조합 전부」로 해 보세요'); return; }
     const picks = pick5(pool);
-    lastPicks.re = picks;
-    const ds = today(); let rec = S.days.find(d => d.date === ds && d.round === NEXT);
-    if (!rec) { rec = { date: ds, round: NEXT, sets: [] }; S.days.push(rec); }
-    rec.sets.push({ t: new Date().toTimeString().slice(0, 5), re: true, from: days.map(d => d.date), combos: picks.map(p => p.n), src: picks.map(() => 'r'), picks: picks.map(p => p.n) });
-    persist(); drawRe();
-    $('#reOut').innerHTML = picksHTML(picks, `${days.map(d => dayLabel(d.date)).join(' + ')} 모은 ${new Set(pool.map(key)).size}개 → 5개 (저장됨)`, 're');
+    lastPicks.re = picks; doneTouch('re');
+    $('#reOut').innerHTML = picksHTML(picks, `${days.map(d => dayLabel(d.date)).join(' + ')} 모은 ${new Set(pool.map(key)).size}개 → 5개`, 're') + '<p class="hint">⑥에서 「확인」을 눌러야 저장돼요.</p>';
+    drawDone();
   };
   const genRender = RENDER.generator;
   RENDER.generator = function () { genRender(); drawRe(); };
-  const origConfirm = $('#sgConfirm').onclick;
-  $('#sgConfirm').onclick = () => { origConfirm(); drawRe(); };
+  
+
+
+  /* ---------- 3-4) ⑥ 최종 선택 → 확인 → 내 번호 조회 ---------- */
+  const doneCard = document.createElement('div'); doneCard.className = 'card sg-done'; doneCard.id = 'doneCard';
+  reCard.after(doneCard);
+  const offG = new Set(), offI = new Set();
+  function doneTouch(g) { offG.delete(g); [...offI].filter(k => k.startsWith(g + '|')).forEach(k => offI.delete(k)); }
+  function groups() {
+    const srcOf = n => { const t = tray.find(x => key(x.n) === key(n)); return t && t.w === 'manual' ? 'm' : 'a'; };
+    const g = [];
+    if (tray.length) g.push({ id: 'tray', title: '④ 고른 조합', items: tray.map(t => ({ n: t.n, src: t.w === 'manual' ? 'm' : 'a' })) });
+    if (lastPicks.gen && lastPicks.gen.length) g.push({ id: 'gen', title: '정밀 추천 5개', items: lastPicks.gen.map(p => ({ n: p.n, src: srcOf(p.n), pick: true })) });
+    if (lastPicks.re && lastPicks.re.length) g.push({ id: 're', title: '⑤ 다시 추린 5개', items: lastPicks.re.map(p => ({ n: p.n, src: 'r', pick: true })) });
+    return g;
+  }
+  function chosen() {
+    const out = new Map();
+    for (const g of groups()) { if (offG.has(g.id)) continue; for (const it of g.items) { if (offI.has(g.id + '|' + key(it.n))) continue; const k = key(it.n); const o = out.get(k); out.set(k, { n: it.n, src: o && o.src !== 'r' ? o.src : it.src, pick: (o && o.pick) || !!it.pick }); } }
+    return [...out.values()];
+  }
+  const SRCL = { a: '자동', m: '수동', r: '다시 5' };
+  function drawDone() {
+    const gs = groups(), ch = chosen();
+    doneCard.innerHTML = `<header><h3>⑥ 최종 선택</h3><span class="hint">저장할 번호 ${ch.length}개</span></header>
+      <p class="hint">위에서 나온 것들을 묶음마다 <b>적용</b> 또는 <b>빼기</b>로 고르고, 번호 하나씩도 뺄 수 있어요. 「확인」을 누르면 내 번호 조회에 저장돼요.</p>
+      ${gs.length ? gs.map(g => { const off = offG.has(g.id); return `<div class="sg-dgroup${off ? ' off' : ''}"><div class="sg-dhead"><b>${g.title}</b> <span class="hint">${g.items.length}개</span>
+          <div class="seg"><button data-g="${g.id}" data-on="1" aria-pressed="${!off}">적용</button><button data-g="${g.id}" data-on="0" aria-pressed="${off}">빼기</button></div></div>
+          ${g.items.map(it => `<label class="sg-trow"><input type="checkbox" data-gi="${g.id}|${key(it.n)}" ${off ? 'disabled' : ''} ${!off && !offI.has(g.id + '|' + key(it.n)) ? 'checked' : ''}><span class="pill ${it.src === 'm' ? 'warn' : it.src === 'r' ? 'good' : 'neutral'}">${SRCL[it.src]}</span><span class="balls">${balls(it.n, 'sm')}</span></label>`).join('')}</div>`; }).join('')
+        : '<p class="empty">③·④에서 조합을 고르거나 정밀 추천 5개를 뽑으면 여기에 모여요.</p>'}
+      <div class="toolbar"><button class="btn primary" id="doneOk" ${ch.length ? '' : 'disabled'}>확인 — 내 번호 조회에 저장 (${ch.length}개)</button></div>`;
+  }
+  doneCard.addEventListener('click', e => {
+    const b = e.target.closest('button[data-g]');
+    if (b) { b.dataset.on === '1' ? offG.delete(b.dataset.g) : offG.add(b.dataset.g); drawDone(); return; }
+    if (e.target.id === 'doneOk') {
+      const ch = chosen(); if (!ch.length) return;
+      const ds = today(); let rec = S.days.find(d => d.date === ds && d.round === NEXT);
+      if (!rec) { rec = { date: ds, round: NEXT, sets: [] }; S.days.push(rec); }
+      rec.sets.push({ t: new Date().toTimeString().slice(0, 5), combos: ch.map(x => x.n), src: ch.map(x => x.src), picks: ch.filter(x => x.pick).map(x => x.n) });
+      persist();
+      tray.length = 0; lastPicks.gen = null; lastPicks.re = null; offG.clear(); offI.clear();
+      $('#sgFinal').innerHTML = ''; $('#reOut').innerHTML = '';
+      drawTray(); drawList(); drawRe(); drawDone();
+      doneCard.insertAdjacentHTML('beforeend', `<p class="callout">${ch.length}개를 ${dayLabel(ds)}에 저장했어요. <button class="btn small" data-tab-go="check">내 번호 조회 보기</button></p>`);
+      toast('내 번호 조회에 저장했어요');
+    }
+    const g = e.target.closest('[data-tab-go]'); if (g) A.showTab(g.dataset.tabGo);
+  });
+  doneCard.addEventListener('change', e => { const c = e.target.closest('input[data-gi]'); if (!c) return; c.checked ? offI.delete(c.dataset.gi) : offI.add(c.dataset.gi); drawDone(); });
+  const genRender2 = RENDER.generator;
+  RENDER.generator = function () { genRender2(); drawDone(); };
 
   /* ---------- 4) 내 번호 조회: 선택(확정)한 번호 전부 ---------- */
   const chk = $('#tab-check');
