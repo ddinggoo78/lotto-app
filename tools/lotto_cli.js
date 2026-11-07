@@ -60,7 +60,7 @@ function metrics(n, prev){
   return { sum, odd, low, ac: diffs.size - 5, endSum, consec, sameEnd: Math.max(...ends), sameGroup: Math.max(...groups),
     prime, m3, m5, comp, sq, dbl, corner, first: n[0], last: n[5], carry: ps ? carry : null, neighbor: ps ? neighbor : null };
 }
-const DRAWS = RAW.rows.map(r => ({ r:r[0], d:r[1], n:r.slice(2,8).sort((a,b)=>a-b), b:r[8] }));
+const DRAWS = RAW.rows.map(r => ({ r:r[0], d:r[1], n:r.slice(2,8).sort((a,b)=>a-b), b:r[8], w3c:r[13], sales:r[19] }));
 DRAWS.forEach((d, i) => { d.m = metrics(d.n, i ? DRAWS[i-1].n : null); });
 const LAST = DRAWS[DRAWS.length - 1];
 const WIN_KEYS = new Set(DRAWS.map(d => keyOf(d.n)));
@@ -201,7 +201,7 @@ console.log(`  조건 통과 조합 ${gen.count.toLocaleString('ko-KR')}개 (전
 if (!gen.count) { console.log('조건을 모두 만족하는 조합이 없습니다.'); process.exit(0); }
 console.log(`[${out.combos.length}개 조합]`);
 for (const c of out.combos) console.log(`  ${c.label}: ${line(c.numbers)}   합${c.sum} 홀짝${c.oddEven} AC${c.ac} | 점수 ${c.score}`);
-console.log(`\n[정밀 추천 ${top.length}개]  (패턴 40% + 번호 흐름 25% + 인기 조합 회피 35%, 겹치는 번호 감점)`);
+console.log(`\n[정밀 추천 ${top.length}개]  (패턴 35% + 번호 흐름 5% + 인기 회피 60%(실제 당첨자 수로 계산한 번호 인기도), 겹치는 번호 감점)`);
 for (const t of out.top5) {
   console.log(`  ${t.rank}위 (${t.label}) ${line(t.numbers)}   점수 ${t.score}${t.adjusted !== t.score ? ` (겹침 감점 후 ${t.adjusted})` : ''}  [패턴 ${t.pattern} · 흐름 ${t.flow} · 회피 ${t.popularity}]`);
   for (const s of t.notes) console.log(`        + ${s}`);

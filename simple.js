@@ -70,7 +70,7 @@ window.LottoSimple = function (A) {
     </div>
     <div class="card">
       <header><h3>③ 만든 조합 <span class="hint" id="sgRunsN"></span></h3><button class="btn small" id="sgRunsClear">기록 지우기</button></header>
-      <p class="hint">②를 누를 때마다 10개씩 아래에 쌓여요. 하나씩 체크하거나 「이 10개 모두 선택」을 누르세요. 점수 = 역대 패턴 40% + 번호 흐름 25% + 인기 조합 피하기 35%</p>
+      <p class="hint">②를 누를 때마다 10개씩 아래에 쌓여요. 하나씩 체크하거나 「이 10개 모두 선택」을 누르세요. 점수 = 역대 패턴 35% + 번호 흐름 5% + 남들이 덜 사는 번호 60%</p>
       <div id="sgList"></div>
     </div>
     <div class="card" id="sgTrayCard">

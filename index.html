@@ -614,11 +614,11 @@ input[type=checkbox]{accent-color:var(--slip);width:16px;height:16px;margin:0}
 <div class="toast" id="toast" hidden></div>
 
 <script src="data/lotto_data.js" charset="utf-8"></script>
-<script src="pick5.js" charset="utf-8"></script>
+<script src="pick5.js?v=2" charset="utf-8"></script>
 <script src="account-config.js?v=2" charset="utf-8"></script>
 <script src="account.js?v=2" charset="utf-8"></script>
 <link rel="stylesheet" href="simple.css">
-<script src="simple.js" charset="utf-8"></script>
+<script src="simple.js?v=2" charset="utf-8"></script>
 <script>
 /* 핸드폰 앱: 오프라인 실행 + 매번 열 때 최신 당첨번호 확인 */
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
@@ -1196,7 +1196,7 @@ function drawResults(){
   const f1 = x => x.toFixed(1).replace(/\.0$/, '');
   const pickHTML = !P ? '' : `<section class="p5" aria-label="정밀 추천 5개">
     <header><h3>정밀 분석 추천 ${P.picked.length}개</h3><span class="hint">위 ${R.list.length}개 중에서 다시 고름 · 서로 다른 번호 ${P.covered}개 사용</span></header>
-    <p class="hint">점수 = 패턴 적합도 40% (합계·홀짝·AC 등이 역대 1등에 흔했던 정도) + 번호 흐름 25% (최근 100회 출현·번호끼리 궁합) + 인기 조합 회피 35% (생일번호만·용지 한 줄 몰림·등차 번호처럼 많은 사람이 고르는 모양 감점). 이미 고른 조합과 번호가 겹치면 1개당 ${P.weights.overlap}점을 빼고 고릅니다.</p>
+    <p class="hint">점수 = 패턴 적합도 35% (합계·홀짝·AC 등이 역대 1등에 흔했던 정도) + 번호 흐름 5% + 인기 회피 60% (역대 실제 당첨자 수로 계산한 "남들이 많이 사는 번호" 감점 + 생일번호만·용지 한 줄 몰림 같은 모양 감점). 이미 고른 조합과 번호가 겹치면 1개당 ${P.weights.overlap}점을 빼고 고릅니다.</p>
     <div>${P.picked.map((r, i) => `<div class="p5-row">
       <span class="p5-rank">${r.rank}위<small>${lab(r.idx)}번 조합</small></span>
       <span class="balls">${balls(r.n, 'sm', v => S.fixed.has(v) ? 'ring' : '')}</span>
