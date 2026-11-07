@@ -21,6 +21,7 @@
   async function getDoc(id) {
     const r = await fetch(BASE + id + '?key=' + CFG.apiKey, { cache: 'no-store' });
     if (r.status === 404) return null;
+    if (r.status === 403) { const e = new Error('blocked'); e.blocked = true; throw e; }
     if (!r.ok) throw new Error('서버 응답 ' + r.status);
     const f = (await r.json()).fields || {};
     return { name: f.name?.stringValue || '', tail: f.tail?.stringValue || '', topic: f.topic?.stringValue || '', state: f.state?.stringValue || '', ts: +(f.ts?.integerValue || 0) };
@@ -100,7 +101,9 @@
         if (doc.state) { ls.set(STORE, doc.state); ls.set(SYNC, String(doc.ts)); }
         sessionStorage.setItem('lotto-justlogin', '1');
         location.reload();
-      } catch (ex) { err.textContent = '연결이 안 돼요. 인터넷을 확인해 주세요 (' + ex.message + ')'; go.disabled = false; go.textContent = '시작하기'; }
+      } catch (ex) {
+        if (ex.blocked) { err.textContent = '등록된 사람만 쓸 수 있는 앱이에요. 전화번호·비밀번호를 다시 확인하거나, 처음이면 앱 주인에게 등록을 부탁해 주세요.'; go.disabled = false; go.textContent = '시작하기'; return; }
+        err.textContent = '연결이 안 돼요. 인터넷을 확인해 주세요 (' + ex.message + ')'; go.disabled = false; go.textContent = '시작하기'; }
     });
   }
 
