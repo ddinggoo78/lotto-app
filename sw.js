@@ -2,14 +2,19 @@
  * 화면 파일: 저장해 두고 바로 띄움 (새 버전이 있으면 다음 실행 때 반영)
  * 당첨번호(data/lotto_data.js): 인터넷이 되면 항상 최신을 받고, 안 되면 저장본 사용
  */
-const VER = 'lotto-app-v2';
+const VER = 'lotto-app-v3';
 const SHELL = ['./', 'index.html', 'pick5.js', 'simple.js', 'simple.css', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'data/lotto_data.js'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VER).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== VER && k !== 'lotto-fonts').map(k => caches.delete(k)))).then(() => self.clients.claim()));
+  e.waitUntil((async () => {
+    const old = (await caches.keys()).filter(k => k !== VER && k !== 'lotto-fonts');
+    await Promise.all(old.map(k => caches.delete(k)));
+    await self.clients.claim();
+    if (old.length) (await self.clients.matchAll({ type: 'window' })).forEach(c => c.postMessage({ type: 'data-updated' })); // 새 버전이면 화면을 한 번 새로 그림
+  })());
 });
 
 function timeout(ms) { return new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms)); }
