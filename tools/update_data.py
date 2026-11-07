@@ -109,6 +109,18 @@ def 업데이트():
         last = rows[-1][0] if rows else 0
         추가 = 0
         오류 = None
+        if rows:  # 접속 점검: 이미 저장된 마지막 회차를 다시 받아 번호가 같은지 확인
+            try:
+                확인 = 회차받기(last)
+            except Exception as e:
+                확인 = None
+                오류 = f"동행복권 접속 실패 ({e})"
+            if not 오류 and (not 확인 or 확인[2:9] != rows[-1][2:9]):
+                오류 = "동행복권 접속 확인 실패 (저장된 회차를 다시 받지 못함)"
+            if 오류:
+                기록(오류)
+                return {"added": 0, "latest": last, "error": 오류, "checked": False}
+            기록(f"동행복권 접속 확인: {last}회 번호 일치")
         no = last + 1
         while True:
             try:
