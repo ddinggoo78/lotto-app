@@ -28,3 +28,4 @@ body.simple #tab-manual > .sg{display:grid;gap:18px;max-width:720px;width:100%;m
 .mn-why{display:grid;gap:2px;font-size:12.5px;line-height:1.45}
 .mn-why .plus-n{color:var(--good)}
 .mn-why .minus-n{color:var(--warn)}
+.sc-dayhead{display:flex;align-items:center;justify-content:space-between;gap:8px;padding-top:10px}

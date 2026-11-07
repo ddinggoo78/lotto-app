@@ -249,75 +249,83 @@ window.LottoSimple = function (A) {
     drawBoard(); drawWeight(); drawList(); drawTray();
   };
 
-  /* ---------- 4) 내 번호 조회: 날짜별 보관함 ---------- */
+  /* ---------- 3-3) 자동번호 생성기 안: 저장한 날짜 모아 다시 5개로 ---------- */
+  const reCard = document.createElement('div'); reCard.className = 'card'; reCard.id = 'reCard';
+  reCard.innerHTML = `<header><h3>④ 저장한 날짜 모아 다시 5개로</h3><div class="toolbar"><button class="btn small" id="reAll">전체 선택</button><button class="btn small" id="reNone">선택 해제</button></div></header>
+    <p class="hint">제${NEXT}회용으로 확정한 날짜를 하나·여러 개·전체 골라, 그 번호들을 모아 다시 정밀 추천 5개로 추려요. 결과는 오늘 날짜로 저장돼요.</p>
+    <div class="chips sc-days" id="reDays"></div>
+    <div class="toolbar"><label class="hint"><input type="radio" name="reSrc" value="all" checked> 확정한 조합 전부</label><label class="hint"><input type="radio" name="reSrc" value="picks"> 그날 추천 5개만</label>
+      <button class="btn primary" id="reRun">5개로 다시 추리기</button></div>
+    <div id="reOut"></div>`;
+  $('#sgFinal').after(reCard);
+  const reSel = new Set(); let reTouched = false;
+  function drawRe() {
+    const days = S.days.filter(d => d.round === NEXT && d.sets.some(x => !x.re)).sort((a, b) => a.date.localeCompare(b.date));
+    for (const d of [...reSel]) if (!days.some(x => x.date === d)) reSel.delete(d);
+    if (!reSel.size && !reTouched) days.forEach(d => reSel.add(d.date));
+    $('#reDays').innerHTML = days.length ? days.map(d => `<button class="chip sc-day${reSel.has(d.date) ? ' on' : ''}" data-d="${d.date}">${dayLabel(d.date)} · ${d.sets.filter(x => !x.re).reduce((a, x) => a + x.combos.length, 0)}개</button>`).join('')
+      : '<span class="empty">아직 확정한 날이 없어요. 위에서 「최종 확정」을 하면 날짜가 생겨요.</span>';
+  }
+  reCard.addEventListener('click', e => { const c = e.target.closest('.sc-day'); if (c) { reTouched = true; reSel.has(c.dataset.d) ? reSel.delete(c.dataset.d) : reSel.add(c.dataset.d); drawRe(); } });
+  $('#reAll').onclick = () => { S.days.filter(d => d.round === NEXT).forEach(d => reSel.add(d.date)); drawRe(); };
+  $('#reNone').onclick = () => { reTouched = true; reSel.clear(); drawRe(); };
+  $('#reRun').onclick = () => {
+    const src = (reCard.querySelector('input[name=reSrc]:checked') || {}).value;
+    const days = S.days.filter(d => d.round === NEXT && reSel.has(d.date)).sort((a, b) => a.date.localeCompare(b.date));
+    if (!days.length) { toast('날짜를 먼저 골라 주세요'); return; }
+    const pool = days.flatMap(d => d.sets.filter(x => !x.re).flatMap(x => src === 'picks' ? x.picks : x.combos));
+    if (!pool.length) { toast('고른 날짜에 추천 5개가 없어요. 「확정한 조합 전부」로 해 보세요'); return; }
+    const picks = pick5(pool);
+    lastPicks.re = picks;
+    const ds = today(); let rec = S.days.find(d => d.date === ds && d.round === NEXT);
+    if (!rec) { rec = { date: ds, round: NEXT, sets: [] }; S.days.push(rec); }
+    rec.sets.push({ t: new Date().toTimeString().slice(0, 5), re: true, from: days.map(d => d.date), combos: picks.map(p => p.n), src: picks.map(() => 'r'), picks: picks.map(p => p.n) });
+    persist(); drawRe();
+    $('#reOut').innerHTML = picksHTML(picks, `${days.map(d => dayLabel(d.date)).join(' + ')} 모은 ${new Set(pool.map(key)).size}개 → 5개 (저장됨)`, 're');
+  };
+  const genRender = RENDER.generator;
+  RENDER.generator = function () { genRender(); drawRe(); };
+  const origConfirm = $('#sgConfirm').onclick;
+  $('#sgConfirm').onclick = () => { origConfirm(); drawRe(); };
+
+  /* ---------- 4) 내 번호 조회: 선택(확정)한 번호 전부 ---------- */
   const chk = $('#tab-check');
   const box = document.createElement('div'); box.className = 'sc';
   box.innerHTML = `
-    <div class="sec-head"><h2>내 번호 조회</h2><p>자동·수동으로 확정한 번호만 날짜별로 모여요. 날짜를 하나·여러 개·전체 골라 보고, 모아서 다시 5개로 추릴 수 있어요.</p></div>
-    <div class="card">
-      <header><h3>회차 · 날짜 고르기</h3><div class="toolbar"><select id="scRound"></select><button class="btn small" id="scAll">전체 선택</button><button class="btn small" id="scNone">선택 해제</button></div></header>
-      <div class="chips sc-days" id="scDays"></div>
-    </div>
+    <div class="sec-head"><h2>내 번호 조회</h2><p>자동·수동으로 확정한 번호와 다시 추린 5개를 모두 보여 줘요. 추첨이 끝나면 맞은 개수가 표시돼요.</p></div>
     <div id="scList"></div>
-    <div class="card"><header><h3>고른 날짜의 번호를 모아 다시 5개로</h3></header>
-      <div class="toolbar"><label class="hint"><input type="radio" name="scSrc" value="all" checked> 확정한 조합 전부</label><label class="hint"><input type="radio" name="scSrc" value="picks"> 그날 추천 5개만</label>
-      <button class="btn primary" id="scRe5">5개로 다시 추리기</button></div>
-      <div id="scRe"></div>
-    </div>
     <div id="scOrig" hidden></div>`;
   const kids = [...chk.children];
   chk.prepend(box);
   const holder = box.querySelector('#scOrig');
-  kids.forEach(k => { if (k.querySelector && k.querySelector('#svList')) k.hidden = true; else if (!k.classList.contains('sec-head')) holder.appendChild(k); else k.hidden = true; });
-  let selRound = null; const selDays = new Set();
+  kids.forEach(k => holder.appendChild(k));
 
-  function rounds() { return [...new Set(S.days.map(d => d.round))].sort((a, b) => b - a); }
-  function drawCheck() {
-    const rs = rounds();
-    if (selRound == null || !rs.includes(selRound)) selRound = rs[0] || NEXT;
-    $('#scRound').innerHTML = (rs.length ? rs : [NEXT]).map(r => `<option value="${r}" ${r === selRound ? 'selected' : ''}>제${r}회${BYR.has(r) ? ' (추첨 끝)' : r === NEXT ? ' (이번 주)' : ''}</option>`).join('');
-    const days = S.days.filter(d => d.round === selRound).sort((a, b) => a.date.localeCompare(b.date));
-    for (const d of [...selDays]) if (!days.some(x => x.date === d)) selDays.delete(d);
-    if (!selDays.size && !drawCheck.touched) days.forEach(d => selDays.add(d.date));
-    $('#scDays').innerHTML = days.length ? days.map(d => `<button class="chip sc-day${selDays.has(d.date) ? ' on' : ''}" data-d="${d.date}">${dayLabel(d.date)} · ${d.sets.reduce((a, s) => a + s.combos.length, 0)}개</button>`).join('')
-      : '<span class="empty">아직 확정한 번호가 없어요. 자동번호 생성기에서 「최종 확정」, 수동번호 생성기에서 「오늘 날짜로 바로 저장」을 누르면 날짜별로 쌓여요.</span>';
-    drawDayList();
-  }
   function resultBadge(n, round) {
     const d = BYR.get(round); if (!d) return '';
     const set = new Set(d.n), m = n.filter(v => set.has(v)).length, b = n.includes(d.b);
     const rk = m === 6 ? 1 : m === 5 && b ? 2 : m === 5 ? 3 : m === 4 ? 4 : m === 3 ? 5 : 0;
     return `<span class="pill ${rk ? 'bad' : 'neutral'}">${m}개 일치${rk ? ` · ${rk}등` : ''}</span>`;
   }
-  function drawDayList() {
-    const days = S.days.filter(d => d.round === selRound && selDays.has(d.date)).sort((a, b) => a.date.localeCompare(b.date));
-    const draw = BYR.get(selRound);
-    $('#scList').innerHTML = (draw ? `<div class="card"><header><h3>제${selRound}회 당첨번호</h3></header><span class="balls">${balls(draw.n, 'sm')}<span class="plus">+</span>${A.ball(draw.b, 'sm')}</span></div>` : '') +
-      (days.length ? days.map(d => `<div class="card"><header><h3>${dayLabel(d.date)}</h3><button class="btn small" data-del="${d.date}">이 날 삭제</button></header>
-        ${d.sets.map((s, si) => `<div class="sc-set"><p class="hint">${s.t.replace(/ 수동$/, '')} 확정 · 조합 ${s.combos.length}개${s.picks.length ? ' · 별표 = 정밀 추천 5' : ''}</p>
-          ${s.combos.map((n, ci) => `<div class="sg-trow${s.picks.some(p => key(p) === key(n)) ? ' star' : ''}"><span class="pill ${(s.src || [])[ci] === 'm' ? 'warn' : 'neutral'}">${(s.src || [])[ci] === 'm' || (!s.src && / 수동$/.test(s.t)) ? '수동' : '자동'}</span><span class="balls">${balls(n, 'sm', v => draw && (draw.n.includes(v)) ? 'ring' : '')}</span>${s.picks.some(p => key(p) === key(n)) ? '<span class="pill bad">추천 5</span>' : ''}${resultBadge(n, selRound)}</div>`).join('')}</div>`).join('')}</div>`).join('')
-        : (S.days.some(d => d.round === selRound) ? '<p class="empty">위에서 날짜를 골라 주세요.</p>' : ''));
+  const SRC = { a: ['자동', 'neutral'], m: ['수동', 'warn'], r: ['다시 5', 'good'] };
+  function drawCheck() {
+    const rs = [...new Set(S.days.map(d => d.round))].sort((a, b) => b - a);
+    if (!rs.length) { $('#scList').innerHTML = '<p class="empty">아직 확정한 번호가 없어요. 자동번호 생성기에서 「최종 확정」, 수동번호 생성기에서 「오늘 날짜로 바로 저장」을 누르면 여기에 쌓여요.</p>'; return; }
+    $('#scList').innerHTML = rs.map(r => {
+      const draw = BYR.get(r), days = S.days.filter(d => d.round === r).sort((a, b) => b.date.localeCompare(a.date));
+      const total = days.reduce((a, d) => a + d.sets.reduce((x, s) => x + s.combos.length, 0), 0);
+      return `<div class="card"><header><h3>제${r}회 ${r === NEXT ? '<span class="pill neutral">이번 주</span>' : ''}</h3><span class="hint">번호 ${total}개</span></header>
+        ${draw ? `<div class="picked-row"><span class="lbl">당첨번호</span><span class="balls">${balls(draw.n, 'sm')}<span class="plus">+</span>${A.ball(draw.b, 'sm')}</span></div>` : ''}
+        ${days.map(d => `<div class="sc-set"><div class="sc-dayhead"><b>${dayLabel(d.date)}</b><button class="btn small" data-del="${r}|${d.date}">이 날 삭제</button></div>
+          ${d.sets.map(s => s.combos.map((n, ci) => { const sc = SRC[(s.src || [])[ci]] || (/ 수동$/.test(s.t) ? SRC.m : SRC.a); const star = !s.re && s.picks.some(p => key(p) === key(n));
+            return `<div class="sg-trow${star ? ' star' : ''}"><span class="pill ${sc[1]}">${sc[0]}</span><span class="balls">${balls(n, 'sm', v => draw && draw.n.includes(v) ? 'ring' : '')}</span>${star ? '<span class="pill bad">추천 5</span>' : ''}${resultBadge(n, r)}</div>`; }).join('')).join('')}
+        </div>`).join('')}</div>`;
+    }).join('');
   }
   box.addEventListener('click', e => {
-    const c = e.target.closest('.sc-day'); if (c) { drawCheck.touched = true; selDays.has(c.dataset.d) ? selDays.delete(c.dataset.d) : selDays.add(c.dataset.d); drawCheck(); return; }
-    const del = e.target.closest('button[data-del]');
-    if (del) { if (del.dataset.armed) { S.days = S.days.filter(d => !(d.date === del.dataset.del && d.round === selRound)); persist(); drawCheck(); } else { del.dataset.armed = '1'; del.textContent = '한 번 더 누르면 삭제'; setTimeout(() => { if (del.isConnected) { delete del.dataset.armed; del.textContent = '이 날 삭제'; } }, 3000); } }
+    const del = e.target.closest('button[data-del]'); if (!del) return;
+    if (del.dataset.armed) { const [r, ds] = del.dataset.del.split('|'); S.days = S.days.filter(d => !(d.date === ds && d.round === +r)); persist(); drawCheck(); }
+    else { del.dataset.armed = '1'; del.textContent = '한 번 더 누르면 삭제'; setTimeout(() => { if (del.isConnected) { delete del.dataset.armed; del.textContent = '이 날 삭제'; } }, 3000); }
   });
-  $('#scRound').onchange = e => { selRound = +e.target.value; selDays.clear(); drawCheck(); };
-  $('#scAll').onclick = () => { S.days.filter(d => d.round === selRound).forEach(d => selDays.add(d.date)); drawCheck(); };
-  $('#scNone').onclick = () => { drawCheck.touched = true; selDays.clear(); drawCheck(); };
-  $('#scRe5').onclick = () => {
-    const src = (box.querySelector('input[name=scSrc]:checked') || {}).value;
-    const days = S.days.filter(d => d.round === selRound && selDays.has(d.date)).sort((a, b) => a.date.localeCompare(b.date));
-    if (!days.length) { toast('날짜를 먼저 골라 주세요'); return; }
-    const pool = days.flatMap(d => d.sets.flatMap(s => src === 'picks' ? s.picks : s.combos));
-    const picks = pick5(pool);
-    lastPicks.re = picks;
-    S.finals.unshift({ round: selRound, from: days.map(d => d.date), t: new Date().toISOString().slice(0, 16).replace('T', ' '), picks: picks.map(p => p.n) });
-    S.finals = S.finals.slice(0, 30); persist();
-    $('#scRe').innerHTML = picksHTML(picks, `${days.map(d => dayLabel(d.date)).join(' + ')} 모은 ${new Set(pool.map(key)).size}개 → 5개`, 're') +
-      (BYR.has(selRound) ? `<div class="chips">${picks.map(p => resultBadge(p.n, selRound)).join('')}</div>` : '');
-  };
 
   const origCheck = RENDER.check;
   RENDER.check = function () { origCheck(); drawCheck(); };
