@@ -183,6 +183,14 @@ window.LottoSimple = function (A) {
   $('#sgTrayClear').onclick = () => { tray.length = 0; drawList(); drawTray(); };
   $('#sgAutoFill').onclick = () => { if (!runs.length) { toast('먼저 10개를 만들어 주세요'); return; } const all = runs.flatMap(run => run.rows.map(r => ({ ...r, w: run.w }))).sort((a, b) => b.total - a.total); for (const r of all) { if (tray.length >= 10) break; addTray(r); } drawList(); drawTray(); };
 
+  /* 저장할 때 핸드폰 알림 (계정이 켜져 있을 때) */
+  function sendSaved(items, ds) {
+    const acc = window.LottoAccount; if (!acc || !acc.user || !acc.notifyKo) return;
+    const circ = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮';
+    const lines = [`${dayLabel(ds)} ${new Date().toTimeString().slice(0, 5)} 저장 · ${items.length}개`].concat(items.slice(0, 15).map((it, i) => `${circ[i] || '·'} ${line(it.n)}  ${it.tag}`));
+    if (items.length > 15) lines.push(`외 ${items.length - 15}개`);
+    acc.notifyKo(`🎱 제${NEXT}회 내 번호 저장`, lines).then(ok => { if (ok) toast('핸드폰으로 알림을 보냈어요'); });
+  }
   /* 5개 추리기: 6개 이상이면 정밀 분석, 5개 이하면 그대로 */
   function pick5(list) {
     const uniq = []; const seen = new Set();
@@ -243,7 +251,7 @@ window.LottoSimple = function (A) {
       $('#mnSave').onclick = () => {
         const ds = today(); let rec = S.days.find(d => d.date === ds && d.round === NEXT);
         if (!rec) { rec = { date: ds, round: NEXT, sets: [] }; S.days.push(rec); }
-        rec.sets.push({ t: new Date().toTimeString().slice(0, 5), combos: [n], src: ['m'], picks: [] }); persist(); toast(`${dayLabel(ds)}에 저장했어요`); drawMList();
+        rec.sets.push({ t: new Date().toTimeString().slice(0, 5), combos: [n], src: ['m'], picks: [] }); persist(); toast(`${dayLabel(ds)}에 저장했어요`); drawMList(); sendSaved([{ n, tag: '수동' }], ds);
       };
       $('#mnCopy').onclick = () => copyText(line(n));
     }
@@ -343,6 +351,7 @@ window.LottoSimple = function (A) {
       if (!rec) { rec = { date: ds, round: NEXT, sets: [] }; S.days.push(rec); }
       rec.sets.push({ t: new Date().toTimeString().slice(0, 5), combos: ch.map(x => x.n), src: ch.map(x => x.src), picks: ch.filter(x => x.pick).map(x => x.n) });
       persist();
+      sendSaved(ch.map(x => ({ n: x.n, tag: (x.pick ? '★' : '') + SRCL[x.src] })), ds);
       tray.length = 0; lastPicks.gen = null; lastPicks.re = null; offG.clear(); offI.clear();
       $('#sgFinal').innerHTML = ''; $('#reOut').innerHTML = '';
       drawTray(); drawList(); drawRe(); drawDone();

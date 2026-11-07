@@ -25,3 +25,10 @@ jobs:
           git add data
           git commit -m "당첨번호 자동 업데이트 $(date -u +%Y-%m-%d)"
           git push
+      - name: 추첨 결과를 두 사람 핸드폰으로 알림
+        env:
+          FIREBASE_SA: ${{ secrets.FIREBASE_SA }}
+        run: |
+          if [ -z "$FIREBASE_SA" ]; then echo "알림 설정 전 — 건너뜀"; exit 0; fi
+          pip install -q google-auth requests
+          python tools/notify_results.py
