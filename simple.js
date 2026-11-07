@@ -41,7 +41,7 @@ window.LottoSimple = function (A) {
 
   /* ---------- 2) 탭: 번호 생성기 · 내 번호 조회만 ---------- */
   document.body.classList.add('simple');
-  $$('#tabs button').forEach(b => { if (b.dataset.tab === 'check') b.textContent = '내 번호 조회'; });
+  $$('#tabs button').forEach(b => { if (b.dataset.tab === 'check') b.textContent = '내 번호 조회'; if (b.dataset.tab === 'generator') b.textContent = '자동번호 생성기'; });
   const h = (location.hash || '').replace('#', '');
   if (h !== 'generator' && h !== 'check' && h !== 'manual') { try { history.replaceState(null, '', '#generator'); } catch (e) { location.hash = 'generator'; } }
 
@@ -52,7 +52,7 @@ window.LottoSimple = function (A) {
   gen.appendChild(orig);
   const ui = document.createElement('div'); ui.className = 'sg'; gen.prepend(ui);
   ui.innerHTML = `
-    <div class="sec-head"><h2>번호 생성기 · 제${NEXT}회용</h2>
+    <div class="sec-head"><h2>자동번호 생성기 · 제${NEXT}회용</h2>
       <p>통계·필터는 자동으로 맞춰져 있어요. (최근 300회 1등 조합 기준, 역대 1등 조합의 ${(autoPass * 100).toFixed(0)}%가 통과하는 범위)</p></div>
     <div class="card">
       <header><h3>① 고정수 · 제외수</h3><button class="btn small" id="sgClear">모두 비우기</button></header>
@@ -178,7 +178,7 @@ window.LottoSimple = function (A) {
     const ds = today(), picks = pick5(tray.map(t => t.n));
     let rec = S.days.find(d => d.date === ds && d.round === NEXT);
     if (!rec) { rec = { date: ds, round: NEXT, sets: [] }; S.days.push(rec); }
-    rec.sets.push({ t: new Date().toTimeString().slice(0, 5), combos: tray.map(t => t.n), picks: picks.map(p => p.n) });
+    rec.sets.push({ t: new Date().toTimeString().slice(0, 5), combos: tray.map(t => t.n), src: tray.map(t => t.w === 'manual' ? 'm' : 'a'), picks: picks.map(p => p.n) });
     persist();
     lastPicks.gen = picks;
     $('#sgFinal').innerHTML = picksHTML(picks, `정밀 추천 5개 · ${dayLabel(ds)} 저장됨`, 'gen') +
@@ -190,13 +190,13 @@ window.LottoSimple = function (A) {
 
 
   /* ---------- 3-2) 수동 선택 ---------- */
-  const tabBtn = document.createElement('button'); tabBtn.setAttribute('role', 'tab'); tabBtn.dataset.tab = 'manual'; tabBtn.textContent = '수동 선택';
+  const tabBtn = document.createElement('button'); tabBtn.setAttribute('role', 'tab'); tabBtn.dataset.tab = 'manual'; tabBtn.textContent = '수동번호 생성기';
   $('#tabs button[data-tab="generator"]').after(tabBtn);
   TABS.push('manual');
   const msec = document.createElement('section'); msec.className = 'tab'; msec.id = 'tab-manual'; msec.hidden = true;
   gen.after(msec);
   msec.innerHTML = `<div class="sg">
-    <div class="sec-head"><h2>수동 선택 · 제${NEXT}회용</h2><p>번호 6개를 직접 고르면 점수와 역대 이력을 보여 줘요. 「고른 조합」에 담으면 번호 생성기의 최종 10개·정밀 5개에 함께 들어가요.</p></div>
+    <div class="sec-head"><h2>수동번호 생성기 · 제${NEXT}회용</h2><p>번호 6개를 직접 고르면 점수와 역대 이력을 보여 줘요. 「고른 조합」에 담으면 자동번호 생성기의 최종 10개·정밀 5개에 함께 들어가요.</p></div>
     <div class="card">
       <header><h3>번호 6개 고르기 <span id="mnN"></span></h3><div class="toolbar"><button class="btn small" id="mnFill">남은 칸 자동</button><button class="btn small" id="mnClear">지우기</button></div></header>
       <div class="board mn-board" id="mnBoard"></div>
@@ -219,11 +219,11 @@ window.LottoSimple = function (A) {
         <div class="mn-why">${r.notes.map(x => `<span class="plus-n">+ ${esc(x)}</span>`).join('')}${r.warns.map(x => `<span class="minus-n">− ${esc(x)}</span>`).join('')}</div>
         <p class="hint">역대 ${fmt(DRAWS.length)}회에 매주 이 번호였다면: ${h.best ? `최고 ${h.best}등, ` : '4등 이상 없음, '}5등 ${h.ranks[5]}번${h.ranks[4] ? ` · 4등 ${h.ranks[4]}번` : ''}${A.WIN_KEYS.has(A.keyOf(n)) ? ' · <b>역대 1등 조합과 똑같아요</b>' : ''}</p>
         <div class="toolbar"><button class="btn primary" id="mnTray">고른 조합에 담기</button><button class="btn" id="mnSave">오늘 날짜로 바로 저장</button><button class="btn" id="mnCopy">복사</button></div></div>`;
-      $('#mnTray').onclick = () => { if (addTray({ n, total: r.total, w: 'manual' })) { drawTray(); drawList(); drawMList(); toast(`고른 조합에 담았어요 (${tray.length}/10) — 번호 생성기 탭에서 확정하세요`); } };
+      $('#mnTray').onclick = () => { if (addTray({ n, total: r.total, w: 'manual' })) { drawTray(); drawList(); drawMList(); toast(`고른 조합에 담았어요 (${tray.length}/10) — 자동번호 생성기에서 확정하세요`); } };
       $('#mnSave').onclick = () => {
         const ds = today(); let rec = S.days.find(d => d.date === ds && d.round === NEXT);
         if (!rec) { rec = { date: ds, round: NEXT, sets: [] }; S.days.push(rec); }
-        rec.sets.push({ t: new Date().toTimeString().slice(0, 5) + ' 수동', combos: [n], picks: [] }); persist(); toast(`${dayLabel(ds)}에 저장했어요`); drawMList();
+        rec.sets.push({ t: new Date().toTimeString().slice(0, 5), combos: [n], src: ['m'], picks: [] }); persist(); toast(`${dayLabel(ds)}에 저장했어요`); drawMList();
       };
       $('#mnCopy').onclick = () => copyText(line(n));
     }
@@ -231,7 +231,7 @@ window.LottoSimple = function (A) {
   }
   function drawMList() {
     const mine = tray.filter(t => t.w === 'manual');
-    $('#mnList').innerHTML = `<header><h3>고른 조합에 담긴 수동 번호 <span class="hint">${mine.length}개 · 전체 ${tray.length}/10</span></h3><button class="btn small" data-tab-go="generator">번호 생성기에서 확정하기</button></header>` +
+    $('#mnList').innerHTML = `<header><h3>고른 조합에 담긴 수동 번호 <span class="hint">${mine.length}개 · 전체 ${tray.length}/10</span></h3><button class="btn small" data-tab-go="generator">자동번호 생성기에서 확정하기</button></header>` +
       (mine.length ? mine.map(t => `<div class="sg-trow"><span class="balls">${balls(t.n, 'sm')}</span><span class="hint">${t.score.toFixed(1)}점</span></div>`).join('') : '<p class="empty">아직 담은 수동 번호가 없어요.</p>');
   }
   $('#mnBoard').addEventListener('click', e => {
@@ -253,7 +253,7 @@ window.LottoSimple = function (A) {
   const chk = $('#tab-check');
   const box = document.createElement('div'); box.className = 'sc';
   box.innerHTML = `
-    <div class="sec-head"><h2>내 번호 조회</h2><p>날짜를 하나 또는 여러 개 고르면 그날 확정한 번호를 보여 줘요. 모아서 다시 5개로 추릴 수 있어요.</p></div>
+    <div class="sec-head"><h2>내 번호 조회</h2><p>자동·수동으로 확정한 번호만 날짜별로 모여요. 날짜를 하나·여러 개·전체 골라 보고, 모아서 다시 5개로 추릴 수 있어요.</p></div>
     <div class="card">
       <header><h3>회차 · 날짜 고르기</h3><div class="toolbar"><select id="scRound"></select><button class="btn small" id="scAll">전체 선택</button><button class="btn small" id="scNone">선택 해제</button></div></header>
       <div class="chips sc-days" id="scDays"></div>
@@ -264,7 +264,7 @@ window.LottoSimple = function (A) {
       <button class="btn primary" id="scRe5">5개로 다시 추리기</button></div>
       <div id="scRe"></div>
     </div>
-    <details class="card"><summary><b>번호 직접 넣어 역대 당첨 이력 보기</b></summary><div id="scOrig"></div></details>`;
+    <div id="scOrig" hidden></div>`;
   const kids = [...chk.children];
   chk.prepend(box);
   const holder = box.querySelector('#scOrig');
@@ -278,8 +278,9 @@ window.LottoSimple = function (A) {
     $('#scRound').innerHTML = (rs.length ? rs : [NEXT]).map(r => `<option value="${r}" ${r === selRound ? 'selected' : ''}>제${r}회${BYR.has(r) ? ' (추첨 끝)' : r === NEXT ? ' (이번 주)' : ''}</option>`).join('');
     const days = S.days.filter(d => d.round === selRound).sort((a, b) => a.date.localeCompare(b.date));
     for (const d of [...selDays]) if (!days.some(x => x.date === d)) selDays.delete(d);
+    if (!selDays.size && !drawCheck.touched) days.forEach(d => selDays.add(d.date));
     $('#scDays').innerHTML = days.length ? days.map(d => `<button class="chip sc-day${selDays.has(d.date) ? ' on' : ''}" data-d="${d.date}">${dayLabel(d.date)} · ${d.sets.reduce((a, s) => a + s.combos.length, 0)}개</button>`).join('')
-      : '<span class="empty">아직 저장한 날이 없어요. 번호 생성기에서 「최종 확정」을 누르면 날짜별로 쌓여요.</span>';
+      : '<span class="empty">아직 확정한 번호가 없어요. 자동번호 생성기에서 「최종 확정」, 수동번호 생성기에서 「오늘 날짜로 바로 저장」을 누르면 날짜별로 쌓여요.</span>';
     drawDayList();
   }
   function resultBadge(n, round) {
@@ -293,18 +294,18 @@ window.LottoSimple = function (A) {
     const draw = BYR.get(selRound);
     $('#scList').innerHTML = (draw ? `<div class="card"><header><h3>제${selRound}회 당첨번호</h3></header><span class="balls">${balls(draw.n, 'sm')}<span class="plus">+</span>${A.ball(draw.b, 'sm')}</span></div>` : '') +
       (days.length ? days.map(d => `<div class="card"><header><h3>${dayLabel(d.date)}</h3><button class="btn small" data-del="${d.date}">이 날 삭제</button></header>
-        ${d.sets.map((s, si) => `<div class="sc-set"><p class="hint">${s.t} 확정 · 조합 ${s.combos.length}개</p>
-          ${s.combos.map(n => `<div class="sg-trow${s.picks.some(p => key(p) === key(n)) ? ' star' : ''}"><span class="balls">${balls(n, 'sm', v => draw && (draw.n.includes(v)) ? 'ring' : '')}</span>${s.picks.some(p => key(p) === key(n)) ? '<span class="pill warn">추천 5</span>' : ''}${resultBadge(n, selRound)}</div>`).join('')}</div>`).join('')}</div>`).join('')
+        ${d.sets.map((s, si) => `<div class="sc-set"><p class="hint">${s.t.replace(/ 수동$/, '')} 확정 · 조합 ${s.combos.length}개${s.picks.length ? ' · 별표 = 정밀 추천 5' : ''}</p>
+          ${s.combos.map((n, ci) => `<div class="sg-trow${s.picks.some(p => key(p) === key(n)) ? ' star' : ''}"><span class="pill ${(s.src || [])[ci] === 'm' ? 'warn' : 'neutral'}">${(s.src || [])[ci] === 'm' || (!s.src && / 수동$/.test(s.t)) ? '수동' : '자동'}</span><span class="balls">${balls(n, 'sm', v => draw && (draw.n.includes(v)) ? 'ring' : '')}</span>${s.picks.some(p => key(p) === key(n)) ? '<span class="pill bad">추천 5</span>' : ''}${resultBadge(n, selRound)}</div>`).join('')}</div>`).join('')}</div>`).join('')
         : (S.days.some(d => d.round === selRound) ? '<p class="empty">위에서 날짜를 골라 주세요.</p>' : ''));
   }
   box.addEventListener('click', e => {
-    const c = e.target.closest('.sc-day'); if (c) { selDays.has(c.dataset.d) ? selDays.delete(c.dataset.d) : selDays.add(c.dataset.d); drawCheck(); return; }
+    const c = e.target.closest('.sc-day'); if (c) { drawCheck.touched = true; selDays.has(c.dataset.d) ? selDays.delete(c.dataset.d) : selDays.add(c.dataset.d); drawCheck(); return; }
     const del = e.target.closest('button[data-del]');
     if (del) { if (del.dataset.armed) { S.days = S.days.filter(d => !(d.date === del.dataset.del && d.round === selRound)); persist(); drawCheck(); } else { del.dataset.armed = '1'; del.textContent = '한 번 더 누르면 삭제'; setTimeout(() => { if (del.isConnected) { delete del.dataset.armed; del.textContent = '이 날 삭제'; } }, 3000); } }
   });
   $('#scRound').onchange = e => { selRound = +e.target.value; selDays.clear(); drawCheck(); };
   $('#scAll').onclick = () => { S.days.filter(d => d.round === selRound).forEach(d => selDays.add(d.date)); drawCheck(); };
-  $('#scNone').onclick = () => { selDays.clear(); drawCheck(); };
+  $('#scNone').onclick = () => { drawCheck.touched = true; selDays.clear(); drawCheck(); };
   $('#scRe5').onclick = () => {
     const src = (box.querySelector('input[name=scSrc]:checked') || {}).value;
     const days = S.days.filter(d => d.round === selRound && selDays.has(d.date)).sort((a, b) => a.date.localeCompare(b.date));
