@@ -1,5 +1,5 @@
 /* 개인용 간단 화면 */
-body.simple .tabs button:not([data-tab="generator"]):not([data-tab="check"]){display:none}
+body.simple .tabs button:not([data-tab="generator"]):not([data-tab="check"]):not([data-tab="manual"]){display:none}
 body.simple #tab-generator > .sg{display:grid;gap:18px;max-width:720px;width:100%;margin:0 auto}
 body.simple #tab-check > .sc{display:grid;gap:18px;max-width:720px;width:100%;margin:0 auto}
 body.simple .sg .board{max-width:460px}
@@ -23,3 +23,8 @@ body.simple .sg .board{max-width:460px}
 .sc-day.on{background:var(--slip);border-color:var(--slip);color:var(--slip-ink)}
 .sc-set{display:grid;gap:2px;padding-top:6px}
 .sc select{font-size:13.5px}
+body.simple #tab-manual > .sg{display:grid;gap:18px;max-width:720px;width:100%;margin:0 auto}
+.mn-board{max-width:460px}
+.mn-why{display:grid;gap:2px;font-size:12.5px;line-height:1.45}
+.mn-why .plus-n{color:var(--good)}
+.mn-why .minus-n{color:var(--warn)}

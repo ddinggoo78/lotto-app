@@ -2,7 +2,7 @@
  * 화면 파일: 저장해 두고 바로 띄움 (새 버전이 있으면 다음 실행 때 반영)
  * 당첨번호(data/lotto_data.js): 인터넷이 되면 항상 최신을 받고, 안 되면 저장본 사용
  */
-const VER = 'lotto-app-v3';
+const VER = 'lotto-app-v4';
 const SHELL = ['./', 'index.html', 'pick5.js', 'simple.js', 'simple.css', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'data/lotto_data.js'];
 
 self.addEventListener('install', e => {

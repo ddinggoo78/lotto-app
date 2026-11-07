@@ -43,7 +43,7 @@ window.LottoSimple = function (A) {
   document.body.classList.add('simple');
   $$('#tabs button').forEach(b => { if (b.dataset.tab === 'check') b.textContent = '내 번호 조회'; });
   const h = (location.hash || '').replace('#', '');
-  if (h !== 'generator' && h !== 'check') { try { history.replaceState(null, '', '#generator'); } catch (e) { location.hash = 'generator'; } }
+  if (h !== 'generator' && h !== 'check' && h !== 'manual') { try { history.replaceState(null, '', '#generator'); } catch (e) { location.hash = 'generator'; } }
 
   /* ---------- 3) 번호 생성기 화면 ---------- */
   const gen = $('#tab-generator');
@@ -98,7 +98,7 @@ window.LottoSimple = function (A) {
   function drawWeight() { $$('#sgWeight button').forEach(b => b.setAttribute('aria-pressed', b.dataset.w === S.weight ? 'true' : 'false')); }
   $('#sgWeight').addEventListener('click', e => { const b = e.target.closest('button[data-w]'); if (b) { S.weight = b.dataset.w; persist(); drawWeight(); } });
 
-  const WL = { uniform: '균등 무작위', hot: '핫넘버', cold: '콜드넘버' };
+  const WL = { uniform: '균등 무작위', hot: '핫넘버', cold: '콜드넘버', manual: '수동' };
   async function run() {
     if (S.busy) return;
     if (45 - S.excl.size < 6) { toast('제외수가 너무 많아요'); return; }
@@ -134,7 +134,7 @@ window.LottoSimple = function (A) {
   function addTray(r) {
     if (inTray(r.n) >= 0) return true;
     if (tray.length >= 10) { toast('고른 조합은 10개까지예요. 확정하거나 몇 개 빼 주세요'); return false; }
-    tray.push({ n: r.n, score: r.total, w: cur ? cur.w : S.weight }); return true;
+    tray.push({ n: r.n, score: r.total, w: r.w || (cur ? cur.w : S.weight) }); return true;
   }
   $('#sgList').addEventListener('change', e => {
     const c = e.target.closest('input[type=checkbox]'); if (!c || !cur) return;
@@ -187,6 +187,62 @@ window.LottoSimple = function (A) {
     $('#sgFinal').scrollIntoView({ behavior: 'smooth', block: 'start' });
     toast('최종 조합과 추천 5개를 저장했어요');
   };
+
+
+  /* ---------- 3-2) 수동 선택 ---------- */
+  const tabBtn = document.createElement('button'); tabBtn.setAttribute('role', 'tab'); tabBtn.dataset.tab = 'manual'; tabBtn.textContent = '수동 선택';
+  $('#tabs button[data-tab="generator"]').after(tabBtn);
+  TABS.push('manual');
+  const msec = document.createElement('section'); msec.className = 'tab'; msec.id = 'tab-manual'; msec.hidden = true;
+  gen.after(msec);
+  msec.innerHTML = `<div class="sg">
+    <div class="sec-head"><h2>수동 선택 · 제${NEXT}회용</h2><p>번호 6개를 직접 고르면 점수와 역대 이력을 보여 줘요. 「고른 조합」에 담으면 번호 생성기의 최종 10개·정밀 5개에 함께 들어가요.</p></div>
+    <div class="card">
+      <header><h3>번호 6개 고르기 <span id="mnN"></span></h3><div class="toolbar"><button class="btn small" id="mnFill">남은 칸 자동</button><button class="btn small" id="mnClear">지우기</button></div></header>
+      <div class="board mn-board" id="mnBoard"></div>
+      <div class="picked-row"><span class="lbl">고른 번호</span><span class="balls" id="mnPicked"></span></div>
+    </div>
+    <div id="mnOut"></div>
+    <div class="card" id="mnList"></div>
+  </div>`;
+  const mpick = [];
+  function drawManual() {
+    $('#mnBoard').innerHTML = Array.from({ length: 45 }, (_, i) => i + 1).map(v => `<button class="cell${mpick.includes(v) ? ' fix' : ''}" data-v="${v}">${v}</button>`).join('');
+    const n = mpick.slice().sort((a, b) => a - b);
+    $('#mnN').textContent = `(${n.length}/6)`;
+    $('#mnPicked').innerHTML = n.length ? balls(n, 'sm') : '<span class="empty">번호판에서 눌러 고르세요</span>';
+    if (n.length < 6) { $('#mnOut').innerHTML = ''; } else {
+      const r = P5.analyze([n], DRAWS, metrics).rows[0], h = checkCombo(n), m = metrics(n, LAST.n);
+      $('#mnOut').innerHTML = `<div class="card"><header><h3>분석 결과</h3><span class="sg-score">${r.total.toFixed(1)}<small>점</small></span></header>
+        <div class="chips"><span class="chip">역대 패턴 <b>${r.pattern.toFixed(0)}</b></span><span class="chip">번호 흐름 <b>${r.flow.toFixed(0)}</b></span><span class="chip">인기 조합 피하기 <b>${r.pop.toFixed(0)}</b></span>
+          <span class="chip">합 <b>${m.sum}</b></span><span class="chip">홀짝 <b>${m.odd}:${6 - m.odd}</b></span><span class="chip">AC <b>${m.ac}</b></span></div>
+        <div class="mn-why">${r.notes.map(x => `<span class="plus-n">+ ${esc(x)}</span>`).join('')}${r.warns.map(x => `<span class="minus-n">− ${esc(x)}</span>`).join('')}</div>
+        <p class="hint">역대 ${fmt(DRAWS.length)}회에 매주 이 번호였다면: ${h.best ? `최고 ${h.best}등, ` : '4등 이상 없음, '}5등 ${h.ranks[5]}번${h.ranks[4] ? ` · 4등 ${h.ranks[4]}번` : ''}${A.WIN_KEYS.has(A.keyOf(n)) ? ' · <b>역대 1등 조합과 똑같아요</b>' : ''}</p>
+        <div class="toolbar"><button class="btn primary" id="mnTray">고른 조합에 담기</button><button class="btn" id="mnSave">오늘 날짜로 바로 저장</button><button class="btn" id="mnCopy">복사</button></div></div>`;
+      $('#mnTray').onclick = () => { if (addTray({ n, total: r.total, w: 'manual' })) { drawTray(); drawList(); drawMList(); toast(`고른 조합에 담았어요 (${tray.length}/10) — 번호 생성기 탭에서 확정하세요`); } };
+      $('#mnSave').onclick = () => {
+        const ds = today(); let rec = S.days.find(d => d.date === ds && d.round === NEXT);
+        if (!rec) { rec = { date: ds, round: NEXT, sets: [] }; S.days.push(rec); }
+        rec.sets.push({ t: new Date().toTimeString().slice(0, 5) + ' 수동', combos: [n], picks: [] }); persist(); toast(`${dayLabel(ds)}에 저장했어요`); drawMList();
+      };
+      $('#mnCopy').onclick = () => copyText(line(n));
+    }
+    drawMList();
+  }
+  function drawMList() {
+    const mine = tray.filter(t => t.w === 'manual');
+    $('#mnList').innerHTML = `<header><h3>고른 조합에 담긴 수동 번호 <span class="hint">${mine.length}개 · 전체 ${tray.length}/10</span></h3><button class="btn small" data-tab-go="generator">번호 생성기에서 확정하기</button></header>` +
+      (mine.length ? mine.map(t => `<div class="sg-trow"><span class="balls">${balls(t.n, 'sm')}</span><span class="hint">${t.score.toFixed(1)}점</span></div>`).join('') : '<p class="empty">아직 담은 수동 번호가 없어요.</p>');
+  }
+  $('#mnBoard').addEventListener('click', e => {
+    const b = e.target.closest('.cell'); if (!b) return; const v = +b.dataset.v, i = mpick.indexOf(v);
+    if (i >= 0) mpick.splice(i, 1); else if (mpick.length < 6) mpick.push(v); else { toast('6개까지 고를 수 있어요'); return; }
+    drawManual();
+  });
+  $('#mnClear').onclick = () => { mpick.length = 0; drawManual(); };
+  $('#mnFill').onclick = () => { while (mpick.length < 6) { const v = 1 + Math.floor(Math.random() * 45); if (!mpick.includes(v)) mpick.push(v); } drawManual(); };
+  msec.addEventListener('click', e => { const g = e.target.closest('[data-tab-go]'); if (g) A.showTab(g.dataset.tabGo); });
+  RENDER.manual = drawManual;
 
   RENDER.generator = function () {
     $('#genTitle') && ($('#genTitle').textContent = `번호 생성기 · 제${NEXT}회용`);
