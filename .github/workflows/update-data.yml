@@ -1,12 +1,16 @@
 name: 매주 당첨번호 업데이트
 on:
   schedule:
-    - cron: "10 13 * * 6"   # 토 22:10 (한국 시간) — 추첨 끝난 뒤
+    - cron: "0-50/10 12 * * 6"   # 토 21:00~21:50 (한국 시간) 10분마다 — 번호 올라오자마자 받기
+    - cron: "0-30/10 13 * * 6"   # 토 22:00~22:30 — 늦게 올라올 때 대비
     - cron: "10 0 * * 0"    # 일 09:10 — 혹시 못 받았으면 다시
     - cron: "10 0 * * 1"    # 월 09:10 — 한 번 더 확인
   workflow_dispatch: {}
 permissions:
   contents: write
+concurrency:
+  group: lotto-update
+  cancel-in-progress: false
 jobs:
   update:
     runs-on: ubuntu-latest
