@@ -615,6 +615,8 @@ input[type=checkbox]{accent-color:var(--slip);width:16px;height:16px;margin:0}
 
 <script src="data/lotto_data.js" charset="utf-8"></script>
 <script src="pick5.js" charset="utf-8"></script>
+<link rel="stylesheet" href="simple.css">
+<script src="simple.js" charset="utf-8"></script>
 <script>
 /* 핸드폰 앱: 오프라인 실행 + 매번 열 때 최신 당첨번호 확인 */
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
@@ -734,11 +736,12 @@ const S = {
   filters: Object.assign(defaultFilters(), saved.filters || {}),
   excludePast: saved.excludePast !== false, weight: saved.weight || 'uniform', count: saved.count || 10,
   saved: Array.isArray(saved.saved) ? saved.saved : [],
+  days: Array.isArray(saved.days) ? saved.days : [], finals: Array.isArray(saved.finals) ? saved.finals : [],
   stPeriod: 0, stBonus: false, ptPeriod: 0, pairSel: 0,
   hs: { page: 0 }, vRound: LAST.r, results: null, busy: false,
 };
 function persist(){
-  try { localStorage.setItem(STORE, JSON.stringify({ fixed:[...S.fixed], excl:[...S.excl], filters:S.filters, excludePast:S.excludePast, weight:S.weight, count:S.count, saved:S.saved })); } catch (e) {}
+  try { localStorage.setItem(STORE, JSON.stringify({ fixed:[...S.fixed], excl:[...S.excl], filters:S.filters, excludePast:S.excludePast, weight:S.weight, count:S.count, saved:S.saved, days:S.days, finals:S.finals })); } catch (e) {}
 }
 
 /* ---------- 공통 UI ---------- */
@@ -1620,6 +1623,8 @@ if (window.claude && typeof window.claude.use === 'function'){
 
 const RENDER = { home: renderHome, history: renderHistory, stats: renderStats, patterns: renderPatterns, generator: renderGenerator, verify: renderVerify, check: renderCheck, guide: renderGuide };
 $('#dataInfo').textContent = `1회 ~ ${LAST.r}회 당첨번호 (${LAST.d} 추첨까지) · 데이터 갱신 ${RAW.updated}`;
+/* 개인용 간단 화면(simple.js)이 있으면 연결 */
+if (window.LottoSimple) window.LottoSimple({ S, DRAWS, LAST, metrics, enumerate, persist, toast, balls, ball, copyText, checkCombo, showTab, $, $$, FILTERS, recent, fmt, won, esc, TOTAL, keyOf, WIN_KEYS, RENDER, freqOf, TABS });
 const start = (location.hash || '').replace('#', '');
 showTab(TABS.includes(start) ? start : 'home', false);
 })();
