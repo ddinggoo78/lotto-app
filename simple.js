@@ -252,14 +252,21 @@ window.LottoSimple = function (A) {
   const msec = document.createElement('section'); msec.className = 'tab'; msec.id = 'tab-manual'; msec.hidden = true;
   gen.after(msec);
   msec.innerHTML = `<div class="sg">
-    <div class="sec-head"><h2>수동번호 생성기 · 제${NEXT}회용</h2><p>번호 6개를 직접 고르면 점수와 역대 이력을 보여 줘요. 「자동번호 생성기에 담기」를 누르면 자동번호 생성기 ③에 들어가서 정밀 추천 5개를 뽑을 때 함께 분석돼요.</p></div>
+    <div class="sec-head"><h2>수동번호 생성기 · 제${NEXT}회용</h2><p>번호 6개를 직접 고르고 「저장하기」를 누르면 내 번호 조회에 들어가요. 6개를 다 고르면 점수와 역대 이력도 아래에 보여 줘요.</p></div>
     <div class="card">
       <header><h3>번호 6개 고르기 <span id="mnN"></span></h3><div class="toolbar"><button class="btn small" id="mnFill">남은 칸 자동</button><button class="btn small" id="mnClear">지우기</button></div></header>
-      <div class="board mn-board" id="mnBoard"></div>
-      <div class="picked-row"><span class="lbl">고른 번호</span><span class="balls" id="mnPicked"></span></div>
+      <div class="mn-wrap">
+        <div class="board mn-board" id="mnBoard"></div>
+        <div class="mn-side">
+          <div class="lbl">고른 번호</div>
+          <div class="balls" id="mnPicked"></div>
+          <button class="btn primary mn-save" id="mnSave" disabled>저장하기</button>
+          <p class="hint" id="mnSaveHint">6개를 고르면 저장할 수 있어요. 저장하면 내 번호 조회에 들어가요.</p>
+          <div id="mnSaved"></div>
+        </div>
+      </div>
     </div>
     <div id="mnOut"></div>
-    <div class="card" id="mnList"></div>
   </div>`;
   const mpick = [];
   function drawManual() {
@@ -267,29 +274,34 @@ window.LottoSimple = function (A) {
     const n = mpick.slice().sort((a, b) => a - b);
     $('#mnN').textContent = `(${n.length}/6)`;
     $('#mnPicked').innerHTML = n.length ? balls(n, 'sm') : '<span class="empty">번호판에서 눌러 고르세요</span>';
+    $('#mnSave').disabled = n.length !== 6;
+    $('#mnSave').textContent = n.length === 6 ? '저장하기' : `저장하기 (${6 - n.length}개 더)`;
     if (n.length < 6) { $('#mnOut').innerHTML = ''; } else {
       const r = P5.analyze([n], DRAWS, metrics).rows[0], h = checkCombo(n), m = metrics(n, LAST.n);
       $('#mnOut').innerHTML = `<div class="card"><header><h3>분석 결과</h3><span class="sg-score">${r.total.toFixed(1)}<small>점</small></span></header>
-        <div class="chips"><span class="chip">역대 패턴 <b>${r.pattern.toFixed(0)}</b></span><span class="chip">번호 흐름 <b>${r.flow.toFixed(0)}</b></span><span class="chip">인기 조합 피하기 <b>${r.pop.toFixed(0)}</b></span>
+        <div class="chips"><span class="chip">역대 패턴 <b>${r.pattern.toFixed(0)}</b></span><span class="chip">번호 흐름 <b>${r.flow.toFixed(0)}</b></span><span class="chip">남들이 덜 사는 번호 <b>${r.pop.toFixed(0)}</b></span>
           <span class="chip">합 <b>${m.sum}</b></span><span class="chip">홀짝 <b>${m.odd}:${6 - m.odd}</b></span><span class="chip">AC <b>${m.ac}</b></span></div>
         <div class="mn-why">${r.notes.map(x => `<span class="plus-n">+ ${esc(x)}</span>`).join('')}${r.warns.map(x => `<span class="minus-n">− ${esc(x)}</span>`).join('')}</div>
         <p class="hint">역대 ${fmt(DRAWS.length)}회에 매주 이 번호였다면: ${h.best ? `최고 ${h.best}등, ` : '4등 이상 없음, '}5등 ${h.ranks[5]}번${h.ranks[4] ? ` · 4등 ${h.ranks[4]}번` : ''}${A.WIN_KEYS.has(A.keyOf(n)) ? ' · <b>역대 1등 조합과 똑같아요</b>' : ''}</p>
-        <div class="toolbar"><button class="btn primary" id="mnTray">자동번호 생성기에 담기</button><button class="btn" id="mnSave">오늘 날짜로 바로 저장</button><button class="btn" id="mnCopy">복사</button></div></div>`;
-      $('#mnTray').onclick = () => { if (manual.some(m => key(m.n) === key(n))) { toast('이미 담았어요'); return; } manual.push({ n, score: r.total }); manualOn = true; drawList(); drawSel(); drawMList(); toast(`자동번호 생성기 ③에 담았어요 (수동 ${manual.length}개)`); };
-      $('#mnSave').onclick = () => {
-        const ds = today(); let rec = S.days.find(d => d.date === ds && d.round === NEXT);
-        if (!rec) { rec = { date: ds, round: NEXT, sets: [] }; S.days.push(rec); }
-        rec.sets.push({ t: new Date().toTimeString().slice(0, 5), combos: [n], src: ['m'], picks: [] }); persist(); toast(`${dayLabel(ds)}에 저장했어요`); drawMList(); sendSaved([{ n, tag: '수동' }], ds);
-      };
+        <div class="toolbar"><button class="btn" id="mnCopy">복사</button></div></div>`;
       $('#mnCopy').onclick = () => copyText(line(n));
     }
     drawMList();
   }
   function drawMList() {
-    const mine = manual;
-    $('#mnList').innerHTML = `<header><h3>자동번호 생성기에 담은 수동 번호 <span class="hint">${mine.length}개</span></h3><button class="btn small" data-tab-go="generator">자동번호 생성기에서 확정하기</button></header>` +
-      (mine.length ? mine.map(t => `<div class="sg-trow"><span class="balls">${balls(t.n, 'sm')}</span><span class="hint">${t.score.toFixed(1)}점</span></div>`).join('') : '<p class="empty">아직 담은 수동 번호가 없어요.</p>');
+    const ds = today(), rec = S.days.find(d => d.date === ds && d.round === NEXT);
+    const mine = rec ? rec.sets.flatMap(st => st.combos.filter((c, i) => (st.src || [])[i] === 'm')) : [];
+    $('#mnSaved').innerHTML = mine.length ? `<div class="lbl" style="margin-top:6px">오늘 저장한 수동 번호 ${mine.length}개</div>${mine.slice(-5).map(c => `<div class="balls">${balls(c, 'sm')}</div>`).join('')}<button class="btn small" data-tab-go="check">내 번호 조회 보기</button>` : '';
   }
+  $('#mnSave').onclick = () => {
+    const n = mpick.slice().sort((a, b) => a - b); if (n.length !== 6) return;
+    const ds = today(); let rec = S.days.find(d => d.date === ds && d.round === NEXT);
+    if (!rec) { rec = { date: ds, round: NEXT, sets: [] }; S.days.push(rec); }
+    rec.sets.push({ t: new Date().toTimeString().slice(0, 5), combos: [n], src: ['m'], picks: [] }); persist();
+    sendSaved([{ n, tag: '수동' }], ds);
+    toast(`${dayLabel(ds)} 내 번호 조회에 저장했어요`);
+    mpick.length = 0; drawManual();
+  };
   $('#mnBoard').addEventListener('click', e => {
     const b = e.target.closest('.cell'); if (!b) return; const v = +b.dataset.v, i = mpick.indexOf(v);
     if (i >= 0) mpick.splice(i, 1); else if (mpick.length < 6) mpick.push(v); else { toast('6개까지 고를 수 있어요'); return; }
