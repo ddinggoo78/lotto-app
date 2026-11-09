@@ -559,6 +559,8 @@ window.LottoSimple = function (A) {
       <div id="qrCamBox" hidden><video id="qrVideo" playsinline muted></video><div class="toolbar"><button class="btn small" id="qrStop">스캔 멈추기</button><span class="hint">QR을 네모 안에 맞춰 주세요</span></div></div>
       <div id="qrOut"></div>
     </div>
+    <div class="sc-head"><h3>저장한 내 번호</h3><span class="hint" id="scSum"></span></div>
+    <div class="seg sc-filter" id="scFilter" role="group" aria-label="보기"><button data-f="all" aria-pressed="true">전체</button><button data-f="a">자동</button><button data-f="m">수동</button><button data-f="b">구매(QR)</button></div>
     <div id="scList"></div>
     <div id="scOrig" hidden></div>`;
   const kids = [...chk.children];
@@ -573,7 +575,12 @@ window.LottoSimple = function (A) {
     return `<span class="pill ${rk ? 'bad' : 'neutral'}">${m}개 일치${rk ? ` · ${rk}등` : ''}</span>`;
   }
   const SRC = { a: ['자동', 'neutral'], m: ['수동', 'warn'], r: ['다시 5', 'good'], b: ['구매(QR)', 'bad'] };
+  let scF = 'all';
+  $('#scFilter').addEventListener('click', e => { const b = e.target.closest('button[data-f]'); if (!b) return; scF = b.dataset.f; $$('#scFilter button').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false')); drawCheck(); });
+  const srcKey = (s, ci) => { const k = (s.src || [])[ci]; return k === 'r' ? 'a' : k || (/ 수동$/.test(s.t) ? 'm' : 'a'); };
   function drawCheck() {
+    const cnt = { a: 0, m: 0, b: 0 }; S.days.forEach(d => d.sets.forEach(st => st.combos.forEach((n, ci) => cnt[srcKey(st, ci)]++)));
+    $('#scSum').textContent = `자동 ${cnt.a} · 수동 ${cnt.m} · 구매(QR) ${cnt.b}`;
     const rs = [...new Set(S.days.map(d => d.round))].sort((a, b) => b - a);
     if (!rs.length) { $('#scList').innerHTML = '<p class="empty">아직 저장한 번호가 없어요. 자동번호 생성기·수동번호 생성기에서 「저장하기」를 누르거나, 위에서 로또 용지 QR을 찍어 저장하면 여기에 쌓여요.</p>'; return; }
     $('#scList').innerHTML = rs.map(r => {
@@ -582,7 +589,7 @@ window.LottoSimple = function (A) {
       return `<div class="card"><header><h3>제${r}회 ${r === NEXT ? '<span class="pill neutral">이번 주</span>' : ''}</h3><span class="hint">번호 ${total}개</span></header>
         ${draw ? `<div class="picked-row"><span class="lbl">당첨번호</span><span class="balls">${balls(draw.n, 'sm')}<span class="plus">+</span>${A.ball(draw.b, 'sm')}</span></div>` : ''}
         ${days.map(d => `<div class="sc-set"><div class="sc-dayhead"><b>${dayLabel(d.date)}</b><button class="btn small" data-del="${r}|${d.date}">이 날 삭제</button></div>
-          ${d.sets.map(s => s.combos.map((n, ci) => { const sc = SRC[(s.src || [])[ci]] || (/ 수동$/.test(s.t) ? SRC.m : SRC.a); const star = !s.re && s.picks.some(p => key(p) === key(n));
+          ${d.sets.map(s => s.combos.map((n, ci) => { if (scF !== 'all' && srcKey(s, ci) !== scF) return ''; const sc = SRC[(s.src || [])[ci]] || (/ 수동$/.test(s.t) ? SRC.m : SRC.a); const star = !s.re && s.picks.some(p => key(p) === key(n));
             return `<div class="sg-trow${star ? ' star' : ''}"><span class="pill ${sc[1]}">${sc[0]}</span><span class="balls">${balls(n, 'sm', v => draw && draw.n.includes(v) ? 'ring' : '')}</span>${star ? '<span class="pill bad">추천 5</span>' : ''}${resultBadge(n, r)}</div>`; }).join('')).join('')}
         </div>`).join('')}</div>`;
     }).join('');

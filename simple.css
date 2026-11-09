@@ -94,3 +94,7 @@ body.simple #tab-rounds > .sg{display:grid;gap:18px;max-width:720px;width:100%;m
 .qr-btns .btn{justify-content:center;padding:12px 6px;font-size:15px;font-weight:700;cursor:pointer}
 #qrCamBox{margin-top:10px}
 #qrVideo{width:100%;max-height:60vh;border-radius:12px;background:#000;object-fit:cover}
+.sc-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-top:6px}
+.sc-head h3{font-size:19px}
+.sc-filter{width:100%}
+.sc-filter button{flex:1 1 auto}
