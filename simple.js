@@ -211,6 +211,7 @@ window.LottoSimple = function (A) {
     const keep = fast.picks.filter(p => !fast.off.has(key(p.n)));
     $('#fastOut').innerHTML = `<div class="card sg-done"><header><h3>초정밀 추천 5개</h3><span class="pill neutral">${WL[fast.mode]}</span></header>
       <p class="hint">조건 통과 ${fmt(fast.count)}개 중 100개 → 정밀 15개${fast.savedN ? ` + 이번 회차 저장 번호 ${fast.savedN}개` : ''} → 5개${fast.note ? ` · ${esc(fast.note)}` : ''}</p>
+      ${(() => { const b = P5.numberPopularity && P5.numberPopularity(DRAWS), i = b && b.info; return i ? `<p class="hint">남들이 덜 사는 번호 분석: 1~${i.last}회 실제 <b>${i.basis} 당첨자 수</b> 기준 (여러 기준 중 최근 150회 검증에서 가장 잘 맞은 것을 자동 선택${i.check != null ? `, 검증 ${i.check}` : ''})</p>` : ''; })()}
       ${fast.picks.map(p => `<label class="p5-row fast-row"><input type="checkbox" data-fk="${key(p.n)}" ${fast.off.has(key(p.n)) ? '' : 'checked'}><span class="p5-rank">${p.rank}위</span><span class="balls">${balls(p.n, 'sm')}</span><span class="p5-total">${p.total != null ? p.total.toFixed(1) : '-'}<small>점</small></span>
         <span class="p5-why">${p.old ? '<span class="pill good">이미 저장한 번호</span> ' : ''}${(p.notes || []).slice(0, 1).map(x => `<span class="plus-n">+ ${esc(x)}</span>`).join('')}${(p.warns || []).slice(0, 1).map(x => `<span class="minus-n">− ${esc(x)}</span>`).join('')}</span></label>`).join('')}
       <div class="toolbar"><button class="btn primary mn-save" id="fastSave" ${keep.length ? '' : 'disabled'}>저장하기 (${keep.length}개)</button></div>

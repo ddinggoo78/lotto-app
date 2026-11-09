@@ -1,0 +1,32 @@
+name: 자동 점검 (매일 + 토요일 추첨 1시간 전)
+on:
+  schedule:
+    - cron: "10 18 * * *"   # 매일 03:10 (한국 시간)
+    - cron: "35 10 * * 6"   # 토 19:35 — 추첨 1시간 전 최종 점검
+  workflow_dispatch: {}
+permissions:
+  contents: write
+concurrency:
+  group: lotto-update
+  cancel-in-progress: false
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: 점검
+        run: python tools/health_check.py
+      - name: 결과 저장
+        run: |
+          git config user.name "lotto-bot"
+          git config user.email "lotto-bot@users.noreply.github.com"
+          git add data
+          if git diff --cached --quiet; then echo "바뀐 것 없음"; exit 0; fi
+          git commit -m "자동 점검 $(TZ=Asia/Seoul date +%Y-%m-%d\ %H:%M)"
+          git push

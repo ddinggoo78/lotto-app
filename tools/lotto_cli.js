@@ -60,7 +60,7 @@ function metrics(n, prev){
   return { sum, odd, low, ac: diffs.size - 5, endSum, consec, sameEnd: Math.max(...ends), sameGroup: Math.max(...groups),
     prime, m3, m5, comp, sq, dbl, corner, first: n[0], last: n[5], carry: ps ? carry : null, neighbor: ps ? neighbor : null };
 }
-const DRAWS = RAW.rows.map(r => ({ r:r[0], d:r[1], n:r.slice(2,8).sort((a,b)=>a-b), b:r[8], w3c:r[13], sales:r[19] }));
+const DRAWS = RAW.rows.map(r => ({ r:r[0], d:r[1], n:r.slice(2,8).sort((a,b)=>a-b), b:r[8], w1c:r[9], w2c:r[11], w3c:r[13], w4c:r[15], w5c:r[17], sales:r[19] }));
 DRAWS.forEach((d, i) => { d.m = metrics(d.n, i ? DRAWS[i-1].n : null); });
 const LAST = DRAWS[DRAWS.length - 1];
 const WIN_KEYS = new Set(DRAWS.map(d => keyOf(d.n)));

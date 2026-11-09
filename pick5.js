@@ -24,25 +24,52 @@
   /* 번호 인기도: 회차별 3등 당첨자 수가 무작위 기대보다 많으면 그 번호들을 많은 사람이 산 것.
      log(실제/기대) ≈ 6개 번호 인기도의 평균 → 릿지 회귀(λ=0.5)로 번호별 값(로그 배수)을 구함 */
   const POP_CACHE = new WeakMap();
+  const PROB = { w3c: 228 / 8145060, w4c: 15 * 741 / 8145060, w5c: 20 * 9139 / 8145060 }; // 3·4·5등 확률
+  /* 번호 인기도 (자동 선택형, 2026-11-09)
+     회차별 3·4·5등 당첨자 수가 무작위 기대보다 많으면 그 번호들을 많은 사람이 산 것.
+     log(실제/기대) ≈ 6개 번호 인기도의 평균 → 릿지 회귀(λ=0.5).
+     기준 후보(3등·4등·5등·셋 평균)를 '최근 150회는 빼고 학습 → 최근 150회의 1·2등 당첨자 수 예측'으로 비교해
+     가장 잘 맞는 기준을 매번 자동으로 고른다. 새 회차가 들어올 때마다 다시 계산된다. */
+  function ridge(rows, key) {
+    const ys = rows.map(d => Math.log(Math.max(d[key] / (d.sales / 1000 * PROB[key]), 0.05)));
+    const ym = ys.reduce((a, b) => a + b, 0) / ys.length;
+    const A = Array.from({ length: 45 }, () => new Float64Array(46));
+    rows.forEach((d, i) => { const y = ys[i] - ym; for (const a of d.n) { A[a - 1][45] += y / 6; for (const b of d.n) A[a - 1][b - 1] += 1 / 36; } });
+    for (let i = 0; i < 45; i++) A[i][i] += 0.5;
+    for (let c = 0; c < 45; c++) {
+      let p = c; for (let r = c + 1; r < 45; r++) if (Math.abs(A[r][c]) > Math.abs(A[p][c])) p = r;
+      [A[c], A[p]] = [A[p], A[c]];
+      for (let r = 0; r < 45; r++) { if (r === c) continue; const f = A[r][c] / A[c][c]; if (f) for (let k = c; k <= 45; k++) A[r][k] -= f * A[c][k]; }
+    }
+    const beta = new Float64Array(46); for (let i = 0; i < 45; i++) beta[i + 1] = A[i][45] / A[i][i]; return beta;
+  }
+  function corr(x, y) { const n = x.length, mx = x.reduce((a, b) => a + b, 0) / n, my = y.reduce((a, b) => a + b, 0) / n; let sxy = 0, sx = 0, sy = 0; for (let i = 0; i < n; i++) { sxy += (x[i] - mx) * (y[i] - my); sx += (x[i] - mx) ** 2; sy += (y[i] - my) ** 2; } return sx && sy ? sxy / Math.sqrt(sx * sy) : 0; }
+  function avgBeta(list) { const b = new Float64Array(46); for (const x of list) for (let v = 1; v <= 45; v++) b[v] += x[v] / list.length; return b; }
   function numberPopularity(draws) {
     if (POP_CACHE.has(draws)) return POP_CACHE.get(draws);
     const use = draws.filter(d => d.r >= 262 && d.sales > 0 && d.w3c != null);
-    let beta = null;
-    if (use.length >= 200) {
-      const ys = use.map(d => Math.log(Math.max(d.w3c / (d.sales / 1000 * P3), 0.05)));
-      const ym = ys.reduce((a, b) => a + b, 0) / ys.length;
-      const A = Array.from({ length: 45 }, () => new Float64Array(46)); // [X'X+λI | X'y]
-      use.forEach((d, i) => {
-        const y = ys[i] - ym;
-        for (const a of d.n) { A[a - 1][45] += y / 6; for (const b of d.n) A[a - 1][b - 1] += 1 / 36; }
-      });
-      for (let i = 0; i < 45; i++) A[i][i] += 0.5;
-      for (let c = 0; c < 45; c++) { // 가우스 소거
-        let p = c; for (let r = c + 1; r < 45; r++) if (Math.abs(A[r][c]) > Math.abs(A[p][c])) p = r;
-        [A[c], A[p]] = [A[p], A[c]];
-        for (let r = 0; r < 45; r++) { if (r === c) continue; const f = A[r][c] / A[c][c]; if (f) for (let k = c; k <= 45; k++) A[r][k] -= f * A[c][k]; }
+    let beta = null, info = null;
+    if (use.length >= 300) {
+      const keys = ['w3c', 'w4c', 'w5c'].filter(k => use.every(d => d[k] != null));
+      const train = use.slice(0, -150), test = use.slice(-150);
+      // 검증 대상: 1등·2등 당첨자 수(무작위 기대 대비). 1등은 0명이 많아 2등과 합쳐 본다
+      const target = test.map(d => Math.log(Math.max((d.w2c != null ? d.w2c : 0) / (d.sales / 1000 * 6 / 8145060) + 0.3 * (d.w1c != null ? d.w1c : 0) / (d.sales / 1000 / 8145060), 0.05)));
+      const cands = {};
+      for (const k of keys) cands[k] = ridge(train, k);
+      if (keys.length > 1) cands.avg = avgBeta(keys.map(k => cands[k]));
+      let best = null;
+      for (const [name, b] of Object.entries(cands)) {
+        const sc = corr(test.map(d => d.n.reduce((a, v) => a + b[v], 0) / 6), target);
+        if (!best || sc > best.sc) best = { name, sc };
       }
-      beta = new Float64Array(46); for (let i = 0; i < 45; i++) beta[i + 1] = A[i][45] / A[i][i];
+      // 고른 기준으로 전체 회차를 다시 학습해서 사용
+      beta = best.name === 'avg' ? avgBeta(keys.map(k => ridge(use, k))) : ridge(use, best.name);
+      info = { basis: { w3c: '3등', w4c: '4등', w5c: '5등', avg: '3·4·5등 평균' }[best.name], check: +best.sc.toFixed(3), rounds: use.length, last: use[use.length - 1].r };
+    } else if (use.length >= 200) { beta = ridge(use, 'w3c'); info = { basis: '3등', check: null, rounds: use.length, last: use[use.length - 1].r }; }
+    if (beta) {
+      beta.info = info;
+      let m = 0, q = 0; for (let v = 1; v <= 45; v++) { m += beta[v] / 45; } for (let v = 1; v <= 45; v++) q += (beta[v] - m) ** 2 / 45;
+      beta.sd6 = Math.sqrt(q) * Math.sqrt((45 - 6) / (44 * 6)); // 무작위 6개 평균의 표준편차 → 점수 눈금
     }
     POP_CACHE.set(draws, beta);
     return beta;
@@ -103,10 +130,10 @@
       let dataPop = null;
       if (beta) {
         const lp = n.reduce((a, v) => a + beta[v], 0) / 6, mult = Math.exp(lp);
-        dataPop = clamp(50 - lp / 0.13 * 50, 0, 100);
-        const many = n.filter(v => beta[v] >= 0.1), few = n.filter(v => beta[v] <= -0.1);
-        if (mult <= 0.95) notes.push(`남들이 덜 사는 번호 위주 — 당첨자 예상 ${mult.toFixed(2)}배${few.length ? ` (${few.join('·')})` : ''}`);
-        else if (mult >= 1.05) warns.push(`남들이 많이 사는 번호 위주 — 당첨자 예상 ${mult.toFixed(2)}배${many.length ? ` (${many.join('·')})` : ''}`);
+        dataPop = clamp(50 - lp / (2 * (beta.sd6 || 0.065)) * 50, 0, 100);
+        const cut = 1.5 * (beta.sd6 || 0.065) * Math.sqrt(6), many = n.filter(v => beta[v] >= cut), few = n.filter(v => beta[v] <= -cut);
+        if (lp <= -(beta.sd6 || 0.065)) notes.push(`남들이 덜 사는 번호 위주 — 당첨자 예상 ${mult.toFixed(2)}배${few.length ? ` (${few.join('·')})` : ''}`);
+        else if (lp >= (beta.sd6 || 0.065)) warns.push(`남들이 많이 사는 번호 위주 — 당첨자 예상 ${mult.toFixed(2)}배${many.length ? ` (${many.join('·')})` : ''}`);
       }
       // ② 극단적 모양 감점
       let pop = 100; const pen = (p, msg) => { pop -= p; warns.push(msg); };
