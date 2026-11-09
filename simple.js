@@ -551,6 +551,14 @@ window.LottoSimple = function (A) {
   const box = document.createElement('div'); box.className = 'sc';
   box.innerHTML = `
     <div class="sec-head"><h2>내 번호 조회</h2><p>자동·수동으로 확정한 번호와 다시 추린 5개를 모두 보여 줘요. 추첨이 끝나면 맞은 개수가 표시돼요.</p></div>
+    <div class="card" id="qrCard">
+      <header><h3>로또 용지 QR로 당첨 확인</h3></header>
+      <p class="hint">산 로또 용지 오른쪽의 QR을 찍으면 그 회차 번호와 당첨 결과를 바로 보여 줘요.</p>
+      <div class="qr-btns"><button class="btn primary" id="qrCam">📷 카메라로 스캔</button><label class="btn" id="qrFileBtn">🖼 QR 사진 올리기<input type="file" id="qrFile" accept="image/*" hidden></label></div>
+      <div class="rd-form"><input id="qrText" placeholder="QR 주소 붙여넣기 (http://m.dhlottery.co.kr/?v=…)"><button class="btn" id="qrGo">확인</button></div>
+      <div id="qrCamBox" hidden><video id="qrVideo" playsinline muted></video><div class="toolbar"><button class="btn small" id="qrStop">스캔 멈추기</button><span class="hint">QR을 네모 안에 맞춰 주세요</span></div></div>
+      <div id="qrOut"></div>
+    </div>
     <div id="scList"></div>
     <div id="scOrig" hidden></div>`;
   const kids = [...chk.children];
@@ -564,10 +572,10 @@ window.LottoSimple = function (A) {
     const rk = m === 6 ? 1 : m === 5 && b ? 2 : m === 5 ? 3 : m === 4 ? 4 : m === 3 ? 5 : 0;
     return `<span class="pill ${rk ? 'bad' : 'neutral'}">${m}개 일치${rk ? ` · ${rk}등` : ''}</span>`;
   }
-  const SRC = { a: ['자동', 'neutral'], m: ['수동', 'warn'], r: ['다시 5', 'good'] };
+  const SRC = { a: ['자동', 'neutral'], m: ['수동', 'warn'], r: ['다시 5', 'good'], b: ['구매(QR)', 'bad'] };
   function drawCheck() {
     const rs = [...new Set(S.days.map(d => d.round))].sort((a, b) => b - a);
-    if (!rs.length) { $('#scList').innerHTML = '<p class="empty">아직 확정한 번호가 없어요. 자동번호 생성기에서 「최종 확정」, 수동번호 생성기에서 「오늘 날짜로 바로 저장」을 누르면 여기에 쌓여요.</p>'; return; }
+    if (!rs.length) { $('#scList').innerHTML = '<p class="empty">아직 저장한 번호가 없어요. 자동번호 생성기·수동번호 생성기에서 「저장하기」를 누르거나, 위에서 로또 용지 QR을 찍어 저장하면 여기에 쌓여요.</p>'; return; }
     $('#scList').innerHTML = rs.map(r => {
       const draw = BYR.get(r), days = S.days.filter(d => d.round === r).sort((a, b) => b.date.localeCompare(a.date));
       const total = days.reduce((a, d) => a + d.sets.reduce((x, s) => x + s.combos.length, 0), 0);
@@ -584,6 +592,93 @@ window.LottoSimple = function (A) {
     if (del.dataset.armed) { const [r, ds] = del.dataset.del.split('|'); S.days = S.days.filter(d => !(d.date === ds && d.round === +r)); persist(); drawCheck(); }
     else { del.dataset.armed = '1'; del.textContent = '한 번 더 누르면 삭제'; setTimeout(() => { if (del.isConnected) { delete del.dataset.armed; del.textContent = '이 날 삭제'; } }, 3000); }
   });
+
+  /* ---------- QR로 당첨 확인 ---------- */
+  // 동행복권 용지 QR: http://m.dhlottery.co.kr/?v=1249m081520283645q011213161822n000000000000…
+  //  v= 뒤 4자리 회차, 이어서 [m 수동·q 자동·s 반자동·n 없음] + 12자리(번호 6개 × 2자리) 가 게임 수만큼
+  function parseQR(txt) {
+    const m = String(txt || '').match(/[?&]v=(\d{4})((?:[a-z]\d{12})+)/i);
+    if (!m) return null;
+    const round = +m[1], games = [];
+    for (const g of m[2].match(/[a-z]\d{12}/gi)) {
+      const t = g[0].toLowerCase(), nums = g.slice(1).match(/\d\d/g).map(Number);
+      if (t === 'n' || nums.every(v => v === 0)) continue;
+      if (nums.some(v => v < 1 || v > 45) || new Set(nums).size !== 6) continue;
+      games.push({ t: { m: '수동', q: '자동', s: '반자동' }[t] || '?', n: nums.sort((a, b) => a - b) });
+    }
+    return games.length ? { round, games } : null;
+  }
+  function rankOf(n, d) {
+    const set = new Set(d.n), m = n.filter(v => set.has(v)).length, b = n.includes(d.b);
+    return { m, rk: m === 6 ? 1 : m === 5 && b ? 2 : m === 5 ? 3 : m === 4 ? 4 : m === 3 ? 5 : 0 };
+  }
+  let qrLast = null;
+  function showQR(txt) {
+    const q = parseQR(txt);
+    if (!q) { $('#qrOut').innerHTML = '<p class="empty">로또 6/45 QR이 아니에요. 용지의 QR을 다시 찍거나 주소를 확인해 주세요.</p>'; return; }
+    qrLast = q; const d = BYR.get(q.round);
+    const amt = (rk) => d ? [0, d.w1a, d.w2a, d.w3a, d.w4a, d.w5a][rk] : 0;
+    let sum = 0;
+    const rows = q.games.map((g, i) => {
+      const r = d ? rankOf(g.n, d) : null; if (r && r.rk) sum += amt(r.rk) || 0;
+      return `<div class="sg-trow"><b>${'ABCDE'[i]}</b><span class="pill neutral">${g.t}</span><span class="balls">${balls(g.n, 'sm', v => d && d.n.includes(v) ? 'ring' : '')}</span>${r ? `<span class="pill ${r.rk ? 'bad' : 'neutral'}">${r.m}개 일치${r.rk ? ` · ${r.rk}등` : ''}</span>` : ''}</div>`;
+    }).join('');
+    const savedKeys = new Set(S.days.filter(x => x.round === q.round).flatMap(x => x.sets.flatMap(st => st.combos)).map(key));
+    const newN = q.games.filter(g => !savedKeys.has(key(g.n))).length;
+    $('#qrOut').innerHTML = `<div class="rd-big"><div class="rd-head"><b>제${q.round}회</b> <span class="hint">${q.games.length}게임</span></div>
+      ${d ? `<div class="picked-row"><span class="lbl">당첨번호</span><span class="balls">${balls(d.n, 'sm')}<span class="plus">+</span>${A.ball(d.b, 'sm')}</span></div>` : `<p class="callout">${q.round}회는 아직 추첨 전이에요. 저장해 두면 추첨 뒤 내 번호 조회와 알림에서 결과를 알려 드려요.</p>`}
+      ${rows}
+      ${d ? `<p class="callout">${sum ? `🎉 당첨! 예상 당첨금 합계 약 <b>${fmt(sum)}원</b> (세금 전)` : '아쉽지만 이번 용지는 당첨이 없어요.'}</p>` : ''}
+      <div class="toolbar"><button class="btn primary" id="qrSave" ${newN ? '' : 'disabled'}>${newN ? `내 번호 조회에 저장 (${newN}게임)` : '이미 저장된 용지예요'}</button></div></div>`;
+  }
+  $('#qrGo').onclick = () => showQR($('#qrText').value);
+  $('#qrText').addEventListener('keydown', e => { if (e.key === 'Enter') showQR($('#qrText').value); });
+  $('#qrOut').addEventListener('click', e => {
+    if (e.target.id !== 'qrSave' || !qrLast) return;
+    const q = qrLast, savedKeys = new Set(S.days.filter(x => x.round === q.round).flatMap(x => x.sets.flatMap(st => st.combos)).map(key));
+    const items = q.games.filter(g => !savedKeys.has(key(g.n))); if (!items.length) return;
+    const ds = today(); let rec = S.days.find(x => x.date === ds && x.round === q.round);
+    if (!rec) { rec = { date: ds, round: q.round, sets: [] }; S.days.push(rec); }
+    rec.sets.push({ t: new Date().toTimeString().slice(0, 5) + ' QR', combos: items.map(g => g.n), src: items.map(() => 'b'), picks: [] });
+    persist(); if (q.round >= NEXT) sendSaved(items.map(g => ({ n: g.n, tag: '구매' })), ds);
+    toast('내 번호 조회에 저장했어요'); showQR('?v=' + String(q.round).padStart(4, '0') + q.games.map(g => 'm' + g.n.map(v => String(v).padStart(2, '0')).join('')).join('')); drawCheck();
+  });
+  // QR 읽기: 휴대폰 크롬의 내장 바코드 인식(BarcodeDetector), 없으면 jsQR 라이브러리
+  let jsQRp = null;
+  const loadJsQR = () => jsQRp || (jsQRp = new Promise((ok, no) => { if (window.jsQR) return ok(window.jsQR); const sc = document.createElement('script'); sc.src = (window.LOTTO_LOCAL ? '/' : '') + 'jsQR.js'; sc.onload = () => ok(window.jsQR); sc.onerror = () => { jsQRp = null; no(new Error('QR 읽기 도구를 불러오지 못했어요 (인터넷 확인)')); }; document.head.appendChild(sc); }));
+  let detector = null; try { if ('BarcodeDetector' in window) detector = new BarcodeDetector({ formats: ['qr_code'] }); } catch (e) {}
+  async function decodeFrom(src, w, h) {
+    if (detector) { try { const r = await detector.detect(src); if (r.length) return r[0].rawValue; } catch (e) {} }
+    const jq = await loadJsQR(); const c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(src, 0, 0, w, h);
+    const r = jq(g.getImageData(0, 0, w, h).data, w, h); return r ? r.data : null;
+  }
+  $('#qrFile').addEventListener('change', async e => {
+    const f = e.target.files[0]; if (!f) return; $('#qrOut').innerHTML = '<p class="hint">QR 읽는 중…</p>';
+    try {
+      const img = new Image(); img.src = URL.createObjectURL(f); await img.decode();
+      const sc = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+      const t = await decodeFrom(img, Math.round(img.naturalWidth * sc), Math.round(img.naturalHeight * sc));
+      if (t) { $('#qrText').value = t; showQR(t); } else $('#qrOut').innerHTML = '<p class="empty">사진에서 QR을 못 찾았어요. QR이 크고 선명하게 나오도록 다시 찍어 주세요.</p>';
+    } catch (ex) { $('#qrOut').innerHTML = `<p class="empty">${esc(ex.message)}</p>`; }
+    e.target.value = '';
+  });
+  let stream = null, scanTimer = null;
+  function stopCam() { clearInterval(scanTimer); scanTimer = null; if (stream) stream.getTracks().forEach(t => t.stop()); stream = null; $('#qrCamBox').hidden = true; }
+  $('#qrStop').onclick = stopCam;
+  $('#qrCam').onclick = async () => {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+      const v = $('#qrVideo'); v.srcObject = stream; await v.play(); $('#qrCamBox').hidden = false; $('#qrOut').innerHTML = '';
+      let busy = false;
+      scanTimer = setInterval(async () => {
+        if (busy || !v.videoWidth) return; busy = true;
+        try { const t = await decodeFrom(v, v.videoWidth, v.videoHeight); if (t && parseQR(t)) { stopCam(); $('#qrText').value = t; showQR(t); if (navigator.vibrate) navigator.vibrate(80); } }
+        catch (ex) { stopCam(); $('#qrOut').innerHTML = `<p class="empty">${esc(ex.message)}</p>`; }
+        busy = false;
+      }, 350);
+    } catch (ex) { stopCam(); $('#qrOut').innerHTML = '<p class="empty">카메라를 열 수 없어요. 카메라 권한을 허용하거나 「QR 사진 올리기」를 써 주세요.</p>'; }
+  };
+  document.addEventListener('visibilitychange', () => { if (document.hidden) stopCam(); });
 
   const origCheck = RENDER.check;
   RENDER.check = function () { origCheck(); drawCheck(); };
