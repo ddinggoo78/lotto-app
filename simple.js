@@ -65,7 +65,7 @@ window.LottoSimple = function (A) {
       <header><h3>② 방식 고르고 10개 만들기</h3></header>
       <p class="hint" id="sgApply"></p>
       <div class="seg sg-seg sg-seg4" id="sgWeight" role="group" aria-label="방식">
-        <button data-w="uniform">균등 무작위<small>① 고정·제외 넣어서</small></button><button data-w="uniformAll">균등 무작위<small>① 무시 · 45개 전체</small></button><button data-w="hot">핫넘버 가중<small>최근 50회 · ① 넣어서</small></button><button data-w="cold">콜드넘버 가중<small>최근 50회 · ① 넣어서</small></button>
+        <button data-w="uniform">균등 무작위<small>① 고정·제외 넣어서</small></button><button data-w="uniformAll">균등 무작위<small>① 무시 · 45개 전체</small></button><button data-w="hot">핫넘버 가중<small>최근 50회 · ① 넣어서</small></button><button data-w="cold">콜드넘버 가중<small>최근 50회 · ① 넣어서</small></button><button data-w="rec" class="sg-rec">추천 고정·제외 (분석)<small>남들이 덜 사는 번호를 분석해 고정·제외를 자동으로 정하고 ①도 함께 넣어서</small></button>
       </div>
       <div class="toolbar"><button class="btn primary" id="sgRun">10개 만들기</button><span class="hint" id="sgInfo"></span></div>
       <div class="progress" id="sgProg" hidden><i></i></div>
@@ -122,9 +122,9 @@ window.LottoSimple = function (A) {
   $('#sgClear').onclick = () => { S.fixed.clear(); S.excl.clear(); actNum = 0; persist(); drawBoard(); drawAct(); };
 
   function drawWeight() { $$('#sgWeight button').forEach(b => b.setAttribute('aria-pressed', b.dataset.w === mode ? 'true' : 'false')); }
-  $('#sgWeight').addEventListener('click', e => { const b = e.target.closest('button[data-w]'); if (b) { mode = b.dataset.w; if (mode !== 'uniformAll') { S.weight = mode; persist(); } drawWeight(); } });
+  $('#sgWeight').addEventListener('click', e => { const b = e.target.closest('button[data-w]'); if (b) { mode = b.dataset.w; if (mode !== 'uniformAll' && mode !== 'rec') { S.weight = mode; persist(); } drawWeight(); } });
 
-  const WL = { uniform: '균등(고정·제외)', uniformAll: '균등(전체)', hot: '핫넘버', cold: '콜드넘버', manual: '수동' };
+  const WL = { uniform: '균등(고정·제외)', uniformAll: '균등(전체)', hot: '핫넘버', cold: '콜드넘버', manual: '수동', rec: '추천 고정·제외' };
   async function run() {
     if (S.busy) return;
     if (mode !== 'uniformAll' && 45 - S.excl.size < 6) { toast('제외수가 너무 많아요'); return; }
@@ -133,16 +133,32 @@ window.LottoSimple = function (A) {
     try {
       const onP = p => { bar.style.width = (p * 100).toFixed(1) + '%'; };
       let pr;
+      let recNote = '';
       if (mode === 'uniformAll') { const f = S.fixed, x = S.excl; S.fixed = new Set(); S.excl = new Set(); try { pr = enumerate(10, 'uniform', onP); } finally { S.fixed = f; S.excl = x; } }
+      else if (mode === 'rec') {
+        // 역대 실제 당첨자 수로 계산한 번호 인기도: 많이 사는 번호 6개는 제외, 덜 사는 번호 중 1개는 고정 (① 선택이 우선)
+        const beta = P5.numberPopularity ? P5.numberPopularity(DRAWS) : null;
+        const f = S.fixed, x = S.excl, nf = new Set(f), nx = new Set(x);
+        if (beta) {
+          const order = Array.from({ length: 45 }, (_, i) => i + 1).sort((a, b) => beta[b] - beta[a]);
+          const pop = order.filter(v => !f.has(v)).slice(0, 6);
+          pop.forEach(v => { if (45 - nx.size - 1 >= 6) nx.add(v); });
+          const low = order.slice(-8).filter(v => !nx.has(v) && !nf.has(v));
+          if (nf.size < 5 && low.length) nf.add(low[Math.floor(Math.random() * low.length)]);
+          const addF = [...nf].filter(v => !f.has(v)), addX = [...nx].filter(v => !x.has(v));
+          recNote = ` (추천 고정 ${addF.join('·') || '없음'} · 추천 제외 ${addX.join('·') || '없음'})`;
+        }
+        S.fixed = nf; S.excl = nx; try { pr = enumerate(10, 'uniform', onP); } finally { S.fixed = f; S.excl = x; }
+      }
       else pr = enumerate(10, mode, onP);
       const r = await pr;
       if (!r.count) { toast('조건을 만족하는 조합이 없어요. 고정수·제외수를 줄여 보세요'); return; }
       const list = r.list.map(n => n.slice().sort((a, b) => a - b));
       const an = list.length > 5 ? P5.analyze(list, DRAWS, metrics) : { rows: list.map((n, idx) => ({ idx, n, total: 0, notes: [], warns: [] })), picked: [] };
       const rank = new Map(an.picked.map(p => [p.idx, p.rank]));
-      cur = { on: true, no: runs.length ? runs[0].no + 1 : 1, list, rows: an.rows.slice().sort((a, b) => b.total - a.total), rank, count: r.count, w: mode };
+      cur = { note: recNote, on: true, no: runs.length ? runs[0].no + 1 : 1, list, rows: an.rows.slice().sort((a, b) => b.total - a.total), rank, count: r.count, w: mode };
       runs.unshift(cur); if (runs.length > 30) runs.pop();
-      $('#sgInfo').textContent = `조건 통과 ${fmt(r.count)}개 중 ${WL[mode]} 방식으로 10개 → ③에 추가(선택됨)`;
+      $('#sgInfo').textContent = `조건 통과 ${fmt(r.count)}개 중 ${WL[mode]} 방식으로 10개 → ③에 추가(선택됨)${recNote}`;
       btn.textContent = '10개 더 만들기';
       drawList(); drawSel();
     } finally { S.busy = false; btn.disabled = false; prog.hidden = true; if (btn.textContent === '계산 중…') btn.textContent = runs.length ? '10개 더 만들기' : '10개 만들기'; }
@@ -161,7 +177,7 @@ window.LottoSimple = function (A) {
     const man = manual.length ? `<div class="sg-run sg-runsel${manualOn ? ' on' : ''}"><div class="sg-runhead"><label class="sg-chk"><input type="checkbox" data-man ${manualOn ? 'checked' : ''}><b>수동으로 담은 조합</b></label><span class="hint">${manual.length}개</span></div>
         ${manual.map((m, i) => `<div class="sg-trow"><span class="balls">${balls(m.n, 'sm')}</span><span class="hint">${m.score.toFixed(1)}점</span><button class="btn small" data-mrm="${i}">빼기</button></div>`).join('')}</div>` : '';
     if (!runs.length) { $('#sgList').innerHTML = man + '<p class="empty">②에서 방식을 고르고 「10개 만들기」를 누르세요.</p>'; return; }
-    $('#sgList').innerHTML = man + runs.slice().reverse().map(run => `<details class="sg-run sg-runsel${run.on ? ' on' : ''}"><summary><label class="sg-chk" onclick="event.stopPropagation()"><input type="checkbox" data-run="${run.no}" ${run.on ? 'checked' : ''}><b>${run.no}번째</b></label> <span class="pill neutral">${WL[run.w]}</span> <span class="hint">10개 · 펼쳐 보기</span></summary>
+    $('#sgList').innerHTML = man + runs.slice().reverse().map(run => `<details class="sg-run sg-runsel${run.on ? ' on' : ''}"><summary><label class="sg-chk" onclick="event.stopPropagation()"><input type="checkbox" data-run="${run.no}" ${run.on ? 'checked' : ''}><b>${run.no}번째</b></label> <span class="pill neutral">${WL[run.w]}</span> <span class="hint">10개 · 펼쳐 보기${run.note ? esc(run.note) : ''}</span></summary>
         ${run.rows.map(r => rowHTML(run, r)).join('')}</details>`).join('');
   }
   const findRun = no => runs.find(r => r.no === +no);

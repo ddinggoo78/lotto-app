@@ -2,8 +2,8 @@
  * 화면 파일: 저장해 두고 바로 띄움 (새 버전이 있으면 다음 실행 때 반영)
  * 당첨번호(data/lotto_data.js): 인터넷이 되면 항상 최신을 받고, 안 되면 저장본 사용
  */
-const VER = 'lotto-app-v17';
-const SHELL = ['./', 'index.html', 'pick5.js?v=2', 'simple.js?v=5', 'simple.css?v=4', 'account.js?v=2', 'account-config.js?v=2', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'data/lotto_data.js'];
+const VER = 'lotto-app-v18';
+const SHELL = ['./', 'index.html', 'pick5.js?v=2', 'simple.js?v=6', 'simple.css?v=5', 'account.js?v=2', 'account-config.js?v=2', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'data/lotto_data.js'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VER).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));

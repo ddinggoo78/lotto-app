@@ -59,3 +59,4 @@ body.simple #tab-manual > .sg{display:grid;gap:18px;max-width:720px;width:100%;m
 .sg-chk{display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:15px}
 .sg-chk input{width:22px;height:22px;accent-color:var(--slip)}
 .sg-runsel .sg-row{grid-template-columns:minmax(0,1fr) auto;cursor:default}
+.sg-seg4 .sg-rec{grid-column:1/-1}
