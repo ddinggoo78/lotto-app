@@ -386,6 +386,73 @@ window.LottoSimple = function (A) {
   msec.addEventListener('click', e => { const g = e.target.closest('[data-tab-go]'); if (g) A.showTab(g.dataset.tabGo); });
   RENDER.manual = drawManual;
 
+  /* ---------- 3-2-1) 회차 당첨번호 조회 (수동번호 생성기와 내 번호 조회 사이) ---------- */
+  const rdBtn = document.createElement('button'); rdBtn.setAttribute('role', 'tab'); rdBtn.dataset.tab = 'rounds'; rdBtn.textContent = '회차 당첨번호';
+  tabBtn.after(rdBtn);
+  TABS.push('rounds');
+  const rsec = document.createElement('section'); rsec.className = 'tab'; rsec.id = 'tab-rounds'; rsec.hidden = true;
+  msec.after(rsec);
+  rsec.innerHTML = `<div class="sg">
+    <div class="sec-head"><h2>회차 당첨번호</h2><p>1회부터 ${LAST.r}회(${LAST.d})까지 당첨번호를 찾아볼 수 있어요. 토요일 추첨 뒤 새 회차가 자동으로 들어와요.</p></div>
+    <div class="card">
+      <header><h3>회차로 찾기</h3></header>
+      <div class="rd-form"><input id="rdNo" type="number" inputmode="numeric" min="1" max="${LAST.r}" placeholder="회차 번호 (예: ${LAST.r})"><button class="btn primary" id="rdGo">조회</button></div>
+      <div class="toolbar"><button class="btn small" id="rdPrev">◀ 이전 회차</button><button class="btn small" id="rdLast">최신 회차</button><button class="btn small" id="rdNext">다음 회차 ▶</button></div>
+      <div id="rdOne"></div>
+    </div>
+    <div class="card">
+      <header><h3>번호로 찾기</h3></header>
+      <p class="hint">번호를 1~6개 넣으면 그 번호가 <b>모두</b> 나온 회차를 찾아요. (보너스 번호 제외)</p>
+      <div class="rd-form"><input id="rdNums" inputmode="numeric" placeholder="예: 7 13 27"><button class="btn primary" id="rdFind">찾기</button></div>
+      <div id="rdFound"></div>
+    </div>
+    <div class="card">
+      <header><h3>최근 회차 <span class="hint" id="rdListN"></span></h3></header>
+      <div id="rdList"></div>
+      <div class="toolbar"><button class="btn" id="rdMore">20회 더 보기</button></div>
+    </div>
+  </div>`;
+  const byR = new Map(DRAWS.map(d => [d.r, d]));
+  let rdCur = LAST.r, rdShown = 20;
+  const won1 = v => v ? (v >= 1e8 ? `${(v / 1e8).toFixed(1).replace(/\.0$/, '')}억 원` : `${fmt(v)}원`) : '-';
+  function rdRow(d) {
+    return `<div class="rd-row" data-r="${d.r}"><b class="rd-no">${d.r}회</b><span class="hint">${d.d}</span><span class="balls">${balls(d.n, 'sm')}<span class="rd-plus">+</span>${balls([d.b], 'sm')}</span></div>`;
+  }
+  function rdOne(no) {
+    const d = byR.get(no); if (!d) { $('#rdOne').innerHTML = `<p class="empty">${no}회는 아직 없어요. 1~${LAST.r}회 사이로 넣어 주세요.</p>`; return; }
+    rdCur = no; $('#rdNo').value = no;
+    const pr = [[1, d.w1c, d.w1a], [2, d.w2c, d.w2a], [3, d.w3c, d.w3a], [4, d.w4c, d.w4a], [5, d.w5c, d.w5a]];
+    $('#rdOne').innerHTML = `<div class="rd-big"><div class="rd-head"><b>${d.r}회</b> <span class="hint">${d.d} 추첨</span></div>
+      <div class="balls rd-balls">${balls(d.n)}<span class="rd-plus">+</span>${balls([d.b])}<span class="hint">보너스</span></div>
+      <table class="rd-tbl"><tr><th>순위</th><th>당첨자</th><th>1인당 금액</th></tr>
+      ${pr.map(([k, c, a]) => `<tr><td>${k}등</td><td>${c != null ? fmt(c) + '명' : '-'}</td><td>${won1(a)}</td></tr>`).join('')}</table>
+      ${d.sales ? `<p class="hint">총 판매금액 ${won1(d.sales)}${d.auto || d.manual || d.semi ? ` · 1등 자동 ${d.auto || 0} · 수동 ${d.manual || 0} · 반자동 ${d.semi || 0}` : ''}</p>` : ''}
+      <div class="toolbar"><button class="btn small" id="rdCopy">번호 복사</button></div></div>`;
+    $('#rdCopy').onclick = () => copyText(`${d.r}회 (${d.d}) ${d.n.join(' ')} + ${d.b}`);
+  }
+  function rdList() {
+    const list = DRAWS.slice(-rdShown).reverse();
+    $('#rdList').innerHTML = list.map(rdRow).join('');
+    $('#rdListN').textContent = `${list.length}회 보는 중`;
+    $('#rdMore').hidden = rdShown >= DRAWS.length;
+  }
+  $('#rdGo').onclick = () => rdOne(+$('#rdNo').value);
+  $('#rdNo').addEventListener('keydown', e => { if (e.key === 'Enter') rdOne(+$('#rdNo').value); });
+  $('#rdPrev').onclick = () => rdOne(Math.max(1, rdCur - 1));
+  $('#rdNext').onclick = () => rdOne(Math.min(LAST.r, rdCur + 1));
+  $('#rdLast').onclick = () => rdOne(LAST.r);
+  $('#rdMore').onclick = () => { rdShown += 20; rdList(); };
+  function rdFind() {
+    const want = [...new Set(($('#rdNums').value.match(/\d+/g) || []).map(Number).filter(v => v >= 1 && v <= 45))].slice(0, 6);
+    if (!want.length) { $('#rdFound').innerHTML = '<p class="empty">1~45 사이 번호를 넣어 주세요.</p>'; return; }
+    const hit = DRAWS.filter(d => want.every(v => d.n.includes(v))).reverse();
+    $('#rdFound').innerHTML = `<p class="hint">${want.join('·')} 이(가) 모두 나온 회차: <b>${hit.length}번</b>${hit.length > 50 ? ' (최근 50회만 보여요)' : ''}</p>` + hit.slice(0, 50).map(rdRow).join('');
+  }
+  $('#rdFind').onclick = rdFind;
+  $('#rdNums').addEventListener('keydown', e => { if (e.key === 'Enter') rdFind(); });
+  rsec.addEventListener('click', e => { const r = e.target.closest('.rd-row'); if (r) { rdOne(+r.dataset.r); $('#rdOne').scrollIntoView({ behavior: 'smooth', block: 'center' }); } });
+  RENDER.rounds = () => { rdOne(rdCur); rdList(); };
+
   RENDER.generator = function () {
     $('#genTitle') && ($('#genTitle').textContent = `번호 생성기 · 제${NEXT}회용`);
     drawBoard(); drawWeight(); drawList(); drawTray();
