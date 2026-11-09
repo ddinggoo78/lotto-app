@@ -55,15 +55,19 @@ window.LottoSimple = function (A) {
     <div class="sec-head"><h2>자동번호 생성기 · 제${NEXT}회용</h2>
       <p>통계·필터는 자동으로 맞춰져 있어요. (최근 300회 1등 조합 기준, 역대 1등 조합의 ${(autoPass * 100).toFixed(0)}%가 통과하는 범위)</p></div>
     <div class="card">
-      <header><h3>① 고정수 · 제외수</h3><button class="btn small" id="sgClear">모두 비우기</button></header>
-      <p class="hint">번호를 <b>한 번</b> 누르면 고정(빨강), <b>두 번</b> 누르면 제외(X), <b>세 번</b> 누르면 해제돼요. 고정은 최대 5개.</p>
+      <header><h3>① 고정수 · 제외수 정하기</h3><button class="btn small" id="sgClear">모두 비우기</button></header>
+      <div class="sg-pick" id="sgPickMode" role="group" aria-label="무엇을 고를지">
+        <button data-p="fix">고정수 고르기<small>꼭 넣을 번호 · 최대 5개</small></button><button data-p="excl">제외수 고르기<small>빼고 싶은 번호</small></button>
+      </div>
+      <p class="hint" id="sgPickHint"></p>
       <div class="board" id="sgBoard"></div>
       <div class="picked" id="sgPicked"></div>
     </div>
     <div class="card">
       <header><h3>② 방식 고르고 10개 만들기</h3></header>
+      <p class="hint" id="sgApply"></p>
       <div class="seg sg-seg sg-seg4" id="sgWeight" role="group" aria-label="방식">
-        <button data-w="uniform">균등 무작위<small>고정·제외 적용</small></button><button data-w="uniformAll">균등 무작위<small>전체 번호</small></button><button data-w="hot">핫넘버 가중<small>최근 50회 · 고정·제외 적용</small></button><button data-w="cold">콜드넘버 가중<small>최근 50회 · 고정·제외 적용</small></button>
+        <button data-w="uniform">균등 무작위<small>① 고정·제외 넣어서</small></button><button data-w="uniformAll">균등 무작위<small>① 무시 · 45개 전체</small></button><button data-w="hot">핫넘버 가중<small>최근 50회 · ① 넣어서</small></button><button data-w="cold">콜드넘버 가중<small>최근 50회 · ① 넣어서</small></button>
       </div>
       <div class="toolbar"><button class="btn primary" id="sgRun">10개 만들기</button><span class="hint" id="sgInfo"></span></div>
       <div class="progress" id="sgProg" hidden><i></i></div>
@@ -84,6 +88,14 @@ window.LottoSimple = function (A) {
   const runs = [];  // 만든 기록 [{no, w, rows, rank, count}]
   let mode = S.weight || 'uniform';
   const tray = [];  // 고른 조합 [{n, score, w}]
+  let pickMode = 'fix'; // ①에서 지금 고르는 것: 고정수(fix) / 제외수(excl)
+  function drawPickMode() {
+    $$('#sgPickMode button').forEach(b => b.setAttribute('aria-pressed', b.dataset.p === pickMode ? 'true' : 'false'));
+    $('#sgPickHint').innerHTML = pickMode === 'fix'
+      ? '지금은 <b>고정수</b>를 골라요. 번호를 누르면 고정(빨강), 한 번 더 누르면 풀려요.'
+      : '지금은 <b>제외수</b>를 골라요. 번호를 누르면 제외(X), 한 번 더 누르면 풀려요.';
+  }
+  $('#sgPickMode').addEventListener('click', e => { const b = e.target.closest('button[data-p]'); if (b) { pickMode = b.dataset.p; drawPickMode(); } });
 
   function drawBoard() {
     $('#sgBoard').innerHTML = Array.from({ length: 45 }, (_, i) => i + 1).map(v =>
@@ -91,12 +103,21 @@ window.LottoSimple = function (A) {
     const fx = [...S.fixed].sort((a, b) => a - b), ex = [...S.excl].sort((a, b) => a - b);
     $('#sgPicked').innerHTML = `<div class="picked-row"><span class="lbl">고정수 ${fx.length}/5</span>${fx.length ? balls(fx, 'sm') : '<span class="empty">없음</span>'}</div>
       <div class="picked-row"><span class="lbl">제외수 ${ex.length}</span>${ex.length ? balls(ex, 'sm strike') : '<span class="empty">없음</span>'}</div>`;
+    const ap = $('#sgApply'); if (ap) ap.innerHTML = (fx.length || ex.length)
+      ? `①에서 정한 <b>고정 ${fx.length ? fx.join('·') : '없음'}</b> / <b>제외 ${ex.length ? ex.join('·') : '없음'}</b> 이 그대로 들어가요. (「① 무시」만 빼고)`
+      : '①에서 고정·제외를 안 정했으면 45개 번호 전체에서 만들어요.';
   }
   $('#sgBoard').addEventListener('click', e => {
     const b = e.target.closest('.cell'); if (!b) return; const v = +b.dataset.v;
-    if (S.fixed.has(v)) { S.fixed.delete(v); if (45 - S.excl.size - 1 >= 6) S.excl.add(v); else toast('최소 6개 번호는 남겨야 해요'); }
-    else if (S.excl.has(v)) S.excl.delete(v);
-    else { if (S.fixed.size >= 5) { toast('고정수는 최대 5개예요. 이 번호는 제외로 넣었어요'); if (45 - S.excl.size - 1 >= 6) S.excl.add(v); } else S.fixed.add(v); }
+    if (pickMode === 'fix') {
+      if (S.fixed.has(v)) S.fixed.delete(v);
+      else if (S.fixed.size >= 5) { toast('고정수는 최대 5개예요'); return; }
+      else { S.excl.delete(v); S.fixed.add(v); }
+    } else {
+      if (S.excl.has(v)) S.excl.delete(v);
+      else if (45 - S.excl.size - 1 < 6) { toast('최소 6개 번호는 남겨야 해요'); return; }
+      else { S.fixed.delete(v); S.excl.add(v); }
+    }
     persist(); drawBoard();
   });
   $('#sgClear').onclick = () => { S.fixed.clear(); S.excl.clear(); persist(); drawBoard(); };
@@ -274,7 +295,7 @@ window.LottoSimple = function (A) {
 
   RENDER.generator = function () {
     $('#genTitle') && ($('#genTitle').textContent = `번호 생성기 · 제${NEXT}회용`);
-    drawBoard(); drawWeight(); drawList(); drawTray();
+    drawPickMode(); drawBoard(); drawWeight(); drawList(); drawTray();
   };
 
   /* ---------- 3-3) 자동번호 생성기 안: 저장한 날짜 모아 다시 5개로 ---------- */

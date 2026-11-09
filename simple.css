@@ -41,3 +41,8 @@ body.simple #tab-manual > .sg{display:grid;gap:18px;max-width:720px;width:100%;m
 .sg-dgroup.off{opacity:.5}
 .sg-dhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .sg-dhead .seg{margin-left:auto}
+.sg-pick{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:4px 0 2px}
+.sg-pick button{display:grid;gap:2px;text-align:center;padding:9px 6px;border:1.5px solid var(--line);border-radius:10px;background:var(--surface);font-weight:700;font-size:14.5px;color:var(--ink-2)}
+.sg-pick button small{font-size:11px;font-weight:500;color:var(--muted)}
+.sg-pick button[aria-pressed="true"]{background:var(--slip);border-color:var(--slip);color:var(--slip-ink)}
+.sg-pick button[aria-pressed="true"] small{color:inherit;opacity:.85}
