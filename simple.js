@@ -72,20 +72,21 @@ window.LottoSimple = function (A) {
     </div>
     <div class="card">
       <header><h3>③ 만든 조합 <span class="hint" id="sgRunsN"></span></h3><button class="btn small" id="sgRunsClear">기록 지우기</button></header>
-      <p class="hint">②를 누를 때마다 10개씩 아래에 쌓여요. 하나씩 체크하거나 「이 10개 모두 선택」을 누르세요. 점수 = 역대 패턴 35% + 번호 흐름 5% + 남들이 덜 사는 번호 60%</p>
+      <p class="hint">②를 누를 때마다 「1번째, 2번째…」로 10개씩 쌓여요. 새로 만든 묶음은 자동으로 <b>선택</b>돼요. 빼고 싶은 묶음만 체크를 풀어 주세요. 묶음을 누르면 안의 10개가 보여요.</p>
+      <div class="toolbar"><button class="btn small" id="sgSelAll">모두 선택</button><button class="btn small" id="sgSelNone">모두 해제</button></div>
       <div id="sgList"></div>
     </div>
     <div class="card" id="sgTrayCard">
-      <header><h3>④ 고른 조합 <span id="sgTrayN"></span></h3><button class="btn small" id="sgTrayClear">비우기</button></header>
-      <p class="hint">③에서 고른 조합(수동번호 생성기에서 담은 것 포함)이 여기에 모여요. 10개까지 고른 뒤 정밀 추천 5개를 뽑으세요.</p>
-      <div id="sgTray"></div>
-      <div class="toolbar"><button class="btn" id="sgAutoFill">점수 높은 순으로 채우기</button><button class="btn primary" id="sgConfirm">정밀 추천 5개 뽑기</button></div>
+      <header><h3>④ 정밀 추천 5개 뽑기</h3></header>
+      <p class="hint" id="sgSelInfo"></p>
+      <div class="toolbar"><button class="btn primary" id="sgConfirm">정밀 추천 5개 뽑기</button></div>
     </div>
     <div id="sgFinal"></div>`;
   let cur = null;   // 가장 최근에 만든 10개
   const runs = [];  // 만든 기록 [{no, w, rows, rank, count}]
   let mode = S.weight || 'uniform';
-  const tray = [];  // 고른 조합 [{n, score, w}]
+  const manual = []; // 수동번호 생성기에서 담은 조합 [{n, score}]
+  let manualOn = true;
   let actNum = 0;   // ①에서 버튼을 띄운 번호
 
   function drawBoard() {
@@ -139,68 +140,60 @@ window.LottoSimple = function (A) {
       const list = r.list.map(n => n.slice().sort((a, b) => a - b));
       const an = list.length > 5 ? P5.analyze(list, DRAWS, metrics) : { rows: list.map((n, idx) => ({ idx, n, total: 0, notes: [], warns: [] })), picked: [] };
       const rank = new Map(an.picked.map(p => [p.idx, p.rank]));
-      cur = { no: runs.length ? runs[0].no + 1 : 1, list, rows: an.rows.slice().sort((a, b) => b.total - a.total), rank, count: r.count, w: mode };
+      cur = { on: true, no: runs.length ? runs[0].no + 1 : 1, list, rows: an.rows.slice().sort((a, b) => b.total - a.total), rank, count: r.count, w: mode };
       runs.unshift(cur); if (runs.length > 30) runs.pop();
-      $('#sgInfo').textContent = `조건 통과 ${fmt(r.count)}개 중 ${WL[mode]} 방식으로 10개 → ③에 추가됨`;
+      $('#sgInfo').textContent = `조건 통과 ${fmt(r.count)}개 중 ${WL[mode]} 방식으로 10개 → ③에 추가(선택됨)`;
       btn.textContent = '10개 더 만들기';
-      drawList();
+      drawList(); drawSel();
     } finally { S.busy = false; btn.disabled = false; prog.hidden = true; if (btn.textContent === '계산 중…') btn.textContent = runs.length ? '10개 더 만들기' : '10개 만들기'; }
   }
   $('#sgRun').onclick = run;
 
-  function inTray(n) { return tray.findIndex(t => key(t.n) === key(n)); }
   function rowHTML(run, r) {
-    const on = inTray(r.n) >= 0, rk = run.rank.get(r.idx);
-    return `<label class="sg-row${on ? ' on' : ''}"><input type="checkbox" data-run="${run.no}" data-k="${key(r.n)}" ${on ? 'checked' : ''}>
-      <span class="balls">${balls(r.n, 'sm', v => S.fixed.has(v) ? 'ring' : '')}</span>
-      <span class="sg-score">${r.total.toFixed(1)}<small>점${rk ? ` · 추천 ${rk}위` : ''}</small></span>
-      <span class="sg-why">${r.notes.slice(0, 1).map(x => `<span class="plus-n">+ ${esc(x)}</span>`).join('')}${r.warns.slice(0, 1).map(x => `<span class="minus-n">− ${esc(x)}</span>`).join('')}</span></label>`;
+    const rk = run.rank.get(r.idx);
+    return `<div class="sg-row"><span class="balls">${balls(r.n, 'sm', v => S.fixed.has(v) ? 'ring' : '')}</span>
+      <span class="sg-score">${r.total.toFixed(1)}<small>점${rk ? ` · 묶음 추천 ${rk}위` : ''}</small></span>
+      <span class="sg-why">${r.notes.slice(0, 1).map(x => `<span class="plus-n">+ ${esc(x)}</span>`).join('')}${r.warns.slice(0, 1).map(x => `<span class="minus-n">− ${esc(x)}</span>`).join('')}</span></div>`;
   }
   function drawList() {
-    $('#sgRunsN').textContent = runs.length ? `${runs.length}번 · ${runs.length * 10}개` : '';
-    if (!runs.length) { $('#sgList').innerHTML = '<p class="empty">②에서 방식을 고르고 「10개 만들기」를 누르세요.</p>'; return; }
-    $('#sgList').innerHTML = runs.map((run, ri) => {
-      const sel = run.rows.filter(r => inTray(r.n) >= 0).length;
-      return `<details class="sg-run" ${ri === 0 ? 'open' : ''}><summary><b>${run.no}번째</b> <span class="pill neutral">${WL[run.w]}</span> <span class="hint">선택 ${sel}/10</span></summary>
-        <div class="toolbar sg-runbar"><button class="btn small" data-all="${run.no}">이 10개 모두 선택</button><button class="btn small" data-top="${run.no}">추천 5개만 선택</button><button class="btn small" data-none="${run.no}">선택 해제</button></div>
-        ${run.rows.map(r => rowHTML(run, r)).join('')}</details>`;
-    }).join('');
+    const onN = runs.filter(r => r.on).length;
+    $('#sgRunsN').textContent = runs.length ? `${runs.length}묶음 · 선택 ${onN}묶음` : '';
+    const man = manual.length ? `<div class="sg-run sg-runsel${manualOn ? ' on' : ''}"><div class="sg-runhead"><label class="sg-chk"><input type="checkbox" data-man ${manualOn ? 'checked' : ''}><b>수동으로 담은 조합</b></label><span class="hint">${manual.length}개</span></div>
+        ${manual.map((m, i) => `<div class="sg-trow"><span class="balls">${balls(m.n, 'sm')}</span><span class="hint">${m.score.toFixed(1)}점</span><button class="btn small" data-mrm="${i}">빼기</button></div>`).join('')}</div>` : '';
+    if (!runs.length) { $('#sgList').innerHTML = man + '<p class="empty">②에서 방식을 고르고 「10개 만들기」를 누르세요.</p>'; return; }
+    $('#sgList').innerHTML = man + runs.slice().reverse().map(run => `<details class="sg-run sg-runsel${run.on ? ' on' : ''}"><summary><label class="sg-chk" onclick="event.stopPropagation()"><input type="checkbox" data-run="${run.no}" ${run.on ? 'checked' : ''}><b>${run.no}번째</b></label> <span class="pill neutral">${WL[run.w]}</span> <span class="hint">10개 · 펼쳐 보기</span></summary>
+        ${run.rows.map(r => rowHTML(run, r)).join('')}</details>`).join('');
   }
   const findRun = no => runs.find(r => r.no === +no);
-  function addTray(r) {
-    if (inTray(r.n) >= 0) return true;
-    if (tray.length >= 10) { toast('고른 조합은 10개까지예요. 확정하거나 몇 개 빼 주세요'); return false; }
-    tray.push({ n: r.n, score: r.total, w: r.w || 'uniform' }); return true;
+  function selectedCombos() {
+    const out = [], seen = new Set();
+    const add = (n, src) => { const k = key(n); if (!seen.has(k)) { seen.add(k); out.push({ n, src }); } };
+    if (manualOn) manual.forEach(m => add(m.n, 'm'));
+    runs.filter(r => r.on).forEach(r => r.rows.forEach(x => add(x.n, 'a')));
+    return out;
   }
+  function drawSel() {
+    const sel = selectedCombos(), runN = runs.filter(r => r.on).length, manN = manualOn ? manual.length : 0;
+    $('#sgSelInfo').innerHTML = sel.length
+      ? `③에서 선택한 <b>${runN}묶음${manN ? ` + 수동 ${manN}개` : ''}</b>, 모두 <b>${sel.length}개 조합</b>을 정밀 분석해서 가장 좋은 5개만 골라요.`
+      : '③에서 묶음을 하나 이상 선택해 주세요.';
+    $('#sgConfirm').disabled = !sel.length;
+    if (typeof drawDone === 'function' && document.getElementById('doneCard')) drawDone();
+  }
+  const drawTray = drawSel; // 예전 이름 호환
   $('#sgList').addEventListener('change', e => {
     const c = e.target.closest('input[type=checkbox]'); if (!c) return;
-    const run = findRun(c.dataset.run); if (!run) return;
-    const r = run.rows.find(x => key(x.n) === c.dataset.k);
-    if (c.checked) { if (!addTray({ ...r, w: run.w })) c.checked = false; } else { const i = inTray(r.n); if (i >= 0) tray.splice(i, 1); }
-    drawList(); drawTray();
+    if (c.hasAttribute('data-man')) manualOn = c.checked;
+    else { const run = findRun(c.dataset.run); if (run) run.on = c.checked; }
+    drawList(); drawSel();
   });
   $('#sgList').addEventListener('click', e => {
-    const b = e.target.closest('button[data-all],button[data-top],button[data-none]'); if (!b) return;
-    e.preventDefault();
-    const run = findRun(b.dataset.all || b.dataset.top || b.dataset.none); if (!run) return;
-    if (b.dataset.none) run.rows.forEach(r => { const i = inTray(r.n); if (i >= 0) tray.splice(i, 1); });
-    else {
-      const list = b.dataset.top ? run.rows.filter(r => run.rank.has(r.idx)) : run.rows;
-      for (const r of list) if (!addTray({ ...r, w: run.w })) break;
-    }
-    drawList(); drawTray();
+    const b = e.target.closest('button[data-mrm]'); if (!b) return;
+    manual.splice(+b.dataset.mrm, 1); drawList(); drawSel(); if (typeof drawMList === 'function') drawMList();
   });
-  $('#sgRunsClear').onclick = () => { runs.length = 0; cur = null; drawList(); };
-  function drawTray() {
-    if (typeof drawDone === 'function' && document.getElementById('doneCard')) drawDone();
-    $('#sgTrayN').textContent = `(${tray.length}/10)`;
-    $('#sgTray').innerHTML = tray.length ? tray.map((t, i) => `<div class="sg-trow"><span class="balls">${balls(t.n, 'sm')}</span><span class="hint">${t.score.toFixed(1)}점 · ${WL[t.w]}</span><button class="btn small" data-rm="${i}">빼기</button></div>`).join('')
-      : '<p class="empty">아직 고른 조합이 없어요.</p>';
-    $('#sgConfirm').disabled = tray.length < 1;
-  }
-  $('#sgTray').addEventListener('click', e => { const b = e.target.closest('button[data-rm]'); if (b) { tray.splice(+b.dataset.rm, 1); drawList(); drawTray(); } });
-  $('#sgTrayClear').onclick = () => { tray.length = 0; drawList(); drawTray(); };
-  $('#sgAutoFill').onclick = () => { if (!runs.length) { toast('먼저 10개를 만들어 주세요'); return; } const all = runs.flatMap(run => run.rows.map(r => ({ ...r, w: run.w }))).sort((a, b) => b.total - a.total); for (const r of all) { if (tray.length >= 10) break; addTray(r); } drawList(); drawTray(); };
+  $('#sgSelAll').onclick = () => { runs.forEach(r => r.on = true); manualOn = true; drawList(); drawSel(); };
+  $('#sgSelNone').onclick = () => { runs.forEach(r => r.on = false); manualOn = false; drawList(); drawSel(); };
+  $('#sgRunsClear').onclick = () => { runs.length = 0; cur = null; drawList(); drawSel(); };
 
   /* 저장할 때 핸드폰 알림 (계정이 켜져 있을 때) */
   function sendSaved(items, ds) {
@@ -227,8 +220,8 @@ window.LottoSimple = function (A) {
   document.addEventListener('click', e => { const b = e.target.closest('button[data-copy5]'); if (b && lastPicks[b.dataset.copy5]) copyText(`${NEXT}회 추천 5개\n` + lastPicks[b.dataset.copy5].map(r => `${r.rank}위: ${line(r.n)}`).join('\n')); });
 
   $('#sgConfirm').onclick = () => {
-    if (!tray.length) return;
-    const picks = pick5(tray.map(t => t.n));
+    const sel = selectedCombos(); if (!sel.length) return;
+    const picks = pick5(sel.map(t => t.n));
     lastPicks.gen = picks; doneTouch('gen');
     $('#sgFinal').innerHTML = picksHTML(picks, '정밀 추천 5개', 'gen') + '<p class="hint">맨 아래 ⑥에서 적용할 것을 고르고 「확인」을 누르면 내 번호 조회에 저장돼요.</p>';
     drawDone();
@@ -243,7 +236,7 @@ window.LottoSimple = function (A) {
   const msec = document.createElement('section'); msec.className = 'tab'; msec.id = 'tab-manual'; msec.hidden = true;
   gen.after(msec);
   msec.innerHTML = `<div class="sg">
-    <div class="sec-head"><h2>수동번호 생성기 · 제${NEXT}회용</h2><p>번호 6개를 직접 고르면 점수와 역대 이력을 보여 줘요. 「고른 조합」에 담으면 자동번호 생성기의 최종 10개·정밀 5개에 함께 들어가요.</p></div>
+    <div class="sec-head"><h2>수동번호 생성기 · 제${NEXT}회용</h2><p>번호 6개를 직접 고르면 점수와 역대 이력을 보여 줘요. 「자동번호 생성기에 담기」를 누르면 자동번호 생성기 ③에 들어가서 정밀 추천 5개를 뽑을 때 함께 분석돼요.</p></div>
     <div class="card">
       <header><h3>번호 6개 고르기 <span id="mnN"></span></h3><div class="toolbar"><button class="btn small" id="mnFill">남은 칸 자동</button><button class="btn small" id="mnClear">지우기</button></div></header>
       <div class="board mn-board" id="mnBoard"></div>
@@ -265,8 +258,8 @@ window.LottoSimple = function (A) {
           <span class="chip">합 <b>${m.sum}</b></span><span class="chip">홀짝 <b>${m.odd}:${6 - m.odd}</b></span><span class="chip">AC <b>${m.ac}</b></span></div>
         <div class="mn-why">${r.notes.map(x => `<span class="plus-n">+ ${esc(x)}</span>`).join('')}${r.warns.map(x => `<span class="minus-n">− ${esc(x)}</span>`).join('')}</div>
         <p class="hint">역대 ${fmt(DRAWS.length)}회에 매주 이 번호였다면: ${h.best ? `최고 ${h.best}등, ` : '4등 이상 없음, '}5등 ${h.ranks[5]}번${h.ranks[4] ? ` · 4등 ${h.ranks[4]}번` : ''}${A.WIN_KEYS.has(A.keyOf(n)) ? ' · <b>역대 1등 조합과 똑같아요</b>' : ''}</p>
-        <div class="toolbar"><button class="btn primary" id="mnTray">고른 조합에 담기</button><button class="btn" id="mnSave">오늘 날짜로 바로 저장</button><button class="btn" id="mnCopy">복사</button></div></div>`;
-      $('#mnTray').onclick = () => { if (addTray({ n, total: r.total, w: 'manual' })) { drawTray(); drawList(); drawMList(); toast(`고른 조합에 담았어요 (${tray.length}/10) — 자동번호 생성기에서 확정하세요`); } };
+        <div class="toolbar"><button class="btn primary" id="mnTray">자동번호 생성기에 담기</button><button class="btn" id="mnSave">오늘 날짜로 바로 저장</button><button class="btn" id="mnCopy">복사</button></div></div>`;
+      $('#mnTray').onclick = () => { if (manual.some(m => key(m.n) === key(n))) { toast('이미 담았어요'); return; } manual.push({ n, score: r.total }); manualOn = true; drawList(); drawSel(); drawMList(); toast(`자동번호 생성기 ③에 담았어요 (수동 ${manual.length}개)`); };
       $('#mnSave').onclick = () => {
         const ds = today(); let rec = S.days.find(d => d.date === ds && d.round === NEXT);
         if (!rec) { rec = { date: ds, round: NEXT, sets: [] }; S.days.push(rec); }
@@ -277,8 +270,8 @@ window.LottoSimple = function (A) {
     drawMList();
   }
   function drawMList() {
-    const mine = tray.filter(t => t.w === 'manual');
-    $('#mnList').innerHTML = `<header><h3>고른 조합에 담긴 수동 번호 <span class="hint">${mine.length}개 · 전체 ${tray.length}/10</span></h3><button class="btn small" data-tab-go="generator">자동번호 생성기에서 확정하기</button></header>` +
+    const mine = manual;
+    $('#mnList').innerHTML = `<header><h3>자동번호 생성기에 담은 수동 번호 <span class="hint">${mine.length}개</span></h3><button class="btn small" data-tab-go="generator">자동번호 생성기에서 확정하기</button></header>` +
       (mine.length ? mine.map(t => `<div class="sg-trow"><span class="balls">${balls(t.n, 'sm')}</span><span class="hint">${t.score.toFixed(1)}점</span></div>`).join('') : '<p class="empty">아직 담은 수동 번호가 없어요.</p>');
   }
   $('#mnBoard').addEventListener('click', e => {
@@ -335,12 +328,13 @@ window.LottoSimple = function (A) {
   /* ---------- 3-4) ⑥ 최종 선택 → 확인 → 내 번호 조회 ---------- */
   const doneCard = document.createElement('div'); doneCard.className = 'card sg-done'; doneCard.id = 'doneCard';
   reCard.after(doneCard);
-  const offG = new Set(), offI = new Set();
+  const offG = new Set(), offI = new Set(), seenSel = new Set(); // ③ 전부 묶음은 처음엔 '빼기'
   function doneTouch(g) { offG.delete(g); [...offI].filter(k => k.startsWith(g + '|')).forEach(k => offI.delete(k)); }
   function groups() {
-    const srcOf = n => { const t = tray.find(x => key(x.n) === key(n)); return t && t.w === 'manual' ? 'm' : 'a'; };
+    const srcOf = n => manual.some(x => key(x.n) === key(n)) ? 'm' : 'a';
     const g = [];
-    if (tray.length) g.push({ id: 'tray', title: '④ 고른 조합', items: tray.map(t => ({ n: t.n, src: t.w === 'manual' ? 'm' : 'a' })) });
+    const sel = selectedCombos();
+    if (sel.length) { if (!seenSel.has('sel')) { seenSel.add('sel'); offG.add('sel'); } g.push({ id: 'sel', title: `③에서 선택한 조합 전부 (${sel.length}개)`, items: sel }); }
     if (lastPicks.gen && lastPicks.gen.length) g.push({ id: 'gen', title: '정밀 추천 5개', items: lastPicks.gen.map(p => ({ n: p.n, src: srcOf(p.n), pick: true })) });
     if (lastPicks.re && lastPicks.re.length) g.push({ id: 're', title: '⑤ 다시 추린 5개', items: lastPicks.re.map(p => ({ n: p.n, src: 'r', pick: true })) });
     return g;
@@ -358,7 +352,7 @@ window.LottoSimple = function (A) {
       ${gs.length ? gs.map(g => { const off = offG.has(g.id); return `<div class="sg-dgroup${off ? ' off' : ''}"><div class="sg-dhead"><b>${g.title}</b> <span class="hint">${g.items.length}개</span>
           <div class="seg"><button data-g="${g.id}" data-on="1" aria-pressed="${!off}">적용</button><button data-g="${g.id}" data-on="0" aria-pressed="${off}">빼기</button></div></div>
           ${g.items.map(it => `<label class="sg-trow"><input type="checkbox" data-gi="${g.id}|${key(it.n)}" ${off ? 'disabled' : ''} ${!off && !offI.has(g.id + '|' + key(it.n)) ? 'checked' : ''}><span class="pill ${it.src === 'm' ? 'warn' : it.src === 'r' ? 'good' : 'neutral'}">${SRCL[it.src]}</span><span class="balls">${balls(it.n, 'sm')}</span></label>`).join('')}</div>`; }).join('')
-        : '<p class="empty">③·④에서 조합을 고르거나 정밀 추천 5개를 뽑으면 여기에 모여요.</p>'}
+        : '<p class="empty">④에서 정밀 추천 5개를 뽑으면 여기에 모여요.</p>'}
       <div class="toolbar"><button class="btn primary" id="doneOk" ${ch.length ? '' : 'disabled'}>확인 — 내 번호 조회에 저장 (${ch.length}개)</button></div>`;
   }
   doneCard.addEventListener('click', e => {
@@ -371,7 +365,7 @@ window.LottoSimple = function (A) {
       rec.sets.push({ t: new Date().toTimeString().slice(0, 5), combos: ch.map(x => x.n), src: ch.map(x => x.src), picks: ch.filter(x => x.pick).map(x => x.n) });
       persist();
       sendSaved(ch.map(x => ({ n: x.n, tag: (x.pick ? '★' : '') + SRCL[x.src] })), ds);
-      tray.length = 0; lastPicks.gen = null; lastPicks.re = null; offG.clear(); offI.clear();
+      manual.length = 0; runs.forEach(r => r.on = false); lastPicks.gen = null; lastPicks.re = null; offG.clear(); offI.clear(); seenSel.clear();
       $('#sgFinal').innerHTML = ''; $('#reOut').innerHTML = '';
       drawTray(); drawList(); drawRe(); drawDone();
       doneCard.insertAdjacentHTML('beforeend', `<p class="callout">${ch.length}개를 ${dayLabel(ds)}에 저장했어요. <button class="btn small" data-tab-go="check">내 번호 조회 보기</button></p>`);

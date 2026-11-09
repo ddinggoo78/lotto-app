@@ -53,3 +53,9 @@ body.simple #tab-manual > .sg{display:grid;gap:18px;max-width:720px;width:100%;m
 .sg-act-btns .btn.fix[aria-pressed="true"],.sg-act-btns .btn.fix:hover{background:var(--slip);border-color:var(--slip);color:var(--slip-ink)}
 .sg-act-btns .btn.excl[aria-pressed="true"],.sg-act-btns .btn.excl:hover{background:var(--ink-2);border-color:var(--ink-2);color:#fff}
 .sg .board .cell.act{outline:3px solid var(--warn);outline-offset:2px}
+.sg-runsel{border:1.5px solid var(--line)}
+.sg-runsel.on{border-color:var(--slip);background:var(--slip-soft)}
+.sg-runsel summary,.sg-runhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.sg-chk{display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:15px}
+.sg-chk input{width:22px;height:22px;accent-color:var(--slip)}
+.sg-runsel .sg-row{grid-template-columns:minmax(0,1fr) auto;cursor:default}
