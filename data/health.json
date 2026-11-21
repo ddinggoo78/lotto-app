@@ -1,18 +1,18 @@
 {
- "checked_at": "2026-11-21 08:57",
+ "checked_at": "2026-11-22 02:45",
  "stage": "매일 점검",
  "problems": [],
  "fixed": [],
  "update": {
-  "added": 0,
-  "latest": 1250,
+  "added": 1,
+  "latest": 1251,
   "error": null
  },
  "model": {
   "basis": "5등",
-  "check": 0.377,
-  "rounds": 989,
-  "last": 1250,
+  "check": 0.369,
+  "rounds": 990,
+  "last": 1251,
   "most": [
    7,
    12,
@@ -34,6 +34,6 @@
    42
   ]
  },
- "last_round": 1250,
+ "last_round": 1251,
  "ok": true
 }
