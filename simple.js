@@ -579,7 +579,7 @@ window.LottoSimple = function (A) {
   const chk = $('#tab-check');
   const box = document.createElement('div'); box.className = 'sc';
   box.innerHTML = `
-    <div class="sec-head"><h2>내 번호 조회</h2><p>저장한 번호 중에서 실제로 살 <b>최종 5게임</b>을 고르면, 추첨이 끝난 뒤 그 결과를 맨 위에 먼저 보여 주고 저장한 번호 전체에서 맞은 것도 함께 알려 줘요.</p></div>
+    <div class="sec-head"><h2>내 번호 조회</h2><p>저장한 번호를 분석해서 실제로 살 게임을 <b>5게임(5,000원)씩</b> 뽑아요. 추첨이 끝나면 고른 게임 결과를 맨 위에 먼저 보여 주고, 저장한 번호 전체에서 맞은 것도 함께 알려 줘요.</p></div>
     <div class="card fn-card" id="scFinal" hidden></div>
     <div class="card" id="qrCard">
       <header><h3>로또 용지 QR로 당첨 확인</h3></header>
@@ -594,7 +594,7 @@ window.LottoSimple = function (A) {
     <div id="scList"></div>
     <details class="card mv-card" id="mvCard">
       <summary><b>번호 옮기기</b> <span class="hint">다른 핸드폰·PC 프로그램과 저장한 번호 주고받기</span></summary>
-      <p class="hint">여기 저장한 번호와 최종 5게임을 글자 코드 하나로 만들어요. 그 코드를 다른 곳(PC의 「로또 분석기」 프로그램, 다른 핸드폰)의 이 칸에 붙여 넣으면 그대로 옮겨져요. 원래 있던 번호는 지워지지 않고, 이미 있는 번호는 두 번 들어가지 않아요.</p>
+      <p class="hint">여기 저장한 번호와 최종으로 고른 게임을 글자 코드 하나로 만들어요. 그 코드를 다른 곳(PC의 「로또 분석기」 프로그램, 다른 핸드폰)의 이 칸에 붙여 넣으면 그대로 옮겨져요. 원래 있던 번호는 지워지지 않고, 이미 있는 번호는 두 번 들어가지 않아요.</p>
       <h4 class="mv-step">① 보내는 쪽: 코드 만들기</h4>
       <div class="toolbar"><button class="btn primary" id="mvMake">코드 만들어 복사</button><button class="btn" id="mvShare" hidden>공유하기 (카톡 등)</button><span class="hint" id="mvInfo"></span></div>
       <textarea id="mvOut" class="mv-code" rows="3" readonly hidden aria-label="만든 코드"></textarea>
@@ -627,7 +627,18 @@ window.LottoSimple = function (A) {
   const finalOf = r => S.finals.find(f => f.round === r);
   const canPick = r => !BYR.has(r) && Date.now() < closeAt(r);
   let pickR = null; const pickSel = new Set();   // 직접 고르기 (최대 5)
-  let anaR = null; const anaSel = new Set();     // 분석할 게임 고르기 (개수 제한 없음, 처음엔 전체 선택)
+  let anaR = null; const anaSel = new Set();     // 분석할 게임 고르기 (개수 제한 없음, 처음엔 아직 안 고른 것 전체 선택)
+  /* 최종 = 회차마다 한 묶음 { round, games(살 게임 전부), info(게임별 분석 점수), sheets([{n, by, from, at}] — 5게임씩 1장 = 5,000원), at }
+     예전 형식(sheets 없음)은 5게임씩 끊어서 장으로 본다 */
+  function sheetsOf(f) {
+    if (!f) return [];
+    const ok = Array.isArray(f.sheets) && f.sheets.length && f.sheets.reduce((a, s) => a + (s.n || 0), 0) === f.games.length;
+    const list = ok ? f.sheets : Array.from({ length: Math.ceil(f.games.length / 5) }, (_, j) => ({ n: Math.min(5, f.games.length - j * 5), by: j ? undefined : f.by, from: j ? undefined : f.from }));
+    let start = 0; return list.map(s => { const o = Object.assign({}, s, { start }); start += s.n; return o; });
+  }
+  const bare = s => ({ n: s.n, by: s.by, from: s.from, at: s.at });
+  const pickedKeys = r => new Set((finalOf(r) || { games: [] }).games.map(key));
+  const remainOf = r => { const pk = pickedKeys(r); return roundCombos(r).filter(n => !pk.has(key(n))); }; // 아직 어느 장에도 안 넣은 저장 번호
   function roundCombos(r) { // 그 회차로 저장한 번호 (같은 번호는 한 번만, 저장한 순서대로)
     const out = [], seen = new Set();
     S.days.filter(d => d.round === r).sort((a, b) => a.date.localeCompare(b.date))
@@ -648,12 +659,12 @@ window.LottoSimple = function (A) {
     const d = BYR.get(r), f = finalOf(r), saved = roundCombos(r), fk = new Set(f ? f.games.map(key) : []);
     let h = `<div class="fn-head"><b>제${r}회 결과</b><span class="hint">${dayLabel(d.d)} 추첨</span></div>
       <div class="picked-row"><span class="lbl">당첨번호</span><span class="balls">${balls(d.n, 'sm')}<span class="plus">+</span>${A.ball(d.b, 'sm')}</span></div>`;
-    if (f) h += `<div class="fn-box"><div class="fn-title">① 최종 ${f.games.length}게임 ${sumPill(rankSummary(f.games, d))}</div>${f.games.map((n, i) => gameRow(n, GL[i], d)).join('')}</div>`;
+    if (f) { const sh = sheetsOf(f); h += `<div class="fn-box"><div class="fn-title">① 최종 ${sh.length > 1 ? `${sh.length}장 · ` : ''}${f.games.length}게임 ${sumPill(rankSummary(f.games, d))}</div>${sheetsHTML(r, f, d)}</div>`; }
     if (saved.length) {
       const hits = saved.filter(n => rankOf(n, d).rk).sort((a, b) => rankOf(a, d).rk - rankOf(b, d).rk);
       const best = Math.max(...saved.map(n => rankOf(n, d).m));
       const note = !hits.length ? `가장 많이 맞은 번호는 ${best}개 일치예요. 3개 이상 맞아야 5등이에요.`
-        : f ? (hits.some(n => !fk.has(key(n))) ? '최종 5게임에 넣지 않은 번호에서도 맞은 게 있어요.' : '맞은 번호는 모두 최종 5게임 안에 있어요.') : '';
+        : f ? (hits.some(n => !fk.has(key(n))) ? '최종으로 고르지 않은 번호에서도 맞은 게 있어요.' : '맞은 번호는 모두 최종으로 고른 게임 안에 있어요.') : '';
       h += `<div class="fn-box"><div class="fn-title">${f ? '② ' : ''}저장한 번호 ${saved.length}개 ${sumPill(rankSummary(saved, d))}</div>
         ${hits.map(n => gameRow(n, '', d, fk.has(key(n)))).join('')}${note ? `<p class="hint">${note}</p>` : ''}</div>`;
     }
@@ -663,12 +674,17 @@ window.LottoSimple = function (A) {
     const f = finalOf(r), saved = roundCombos(r), open = canPick(r), before = Date.now() < closeAt(r);
     if (!f && !saved.length) return '';
     let h = `<div class="fn-head"><b>제${r}회${r === NEXT ? ' <span class="pill neutral">이번 주</span>' : ''}</b><span class="hint">${before ? `${dayLabel(ymd(drawDay(r)))} 오후 8시 35분 추첨` : '추첨 끝남 · 당첨번호 반영 전'}</span></div>`;
-    if (f) h += `<div class="fn-box"><div class="fn-title">${f.by === 'ana' ? `저장한 번호 ${f.from}게임에서 분석한 5게임` : `최종 ${f.games.length}게임`} <span class="pill good">저장됨</span></div>${f.games.map((n, i) => gameRow(n, GL[i]) + whyRow(f.info && f.info[i], i)).join('')}
-        <p class="hint">${before ? '추첨이 끝나면 이 게임들의 결과를 여기 맨 먼저 보여 드려요.' : '당첨번호가 들어오면 이 게임들의 결과를 여기 맨 먼저 보여 드려요.'}${f.by === 'ana' ? ' 점수는 고르는 기준일 뿐이고, 어떤 조합이든 1등 확률은 같아요.' : ''}</p>
-        <div class="toolbar">${open ? `<button class="btn small" data-asel="${r}">다시 분석</button><button class="btn small" data-fpick="${r}">직접 고르기</button>` : ''}<button class="btn small" data-fcopy="${r}">복사</button><button class="btn small" data-fdel="${r}">최종 선택 지우기</button></div></div>`;
-    else if (open) h += `<div class="fn-box"><p>제${r}회로 저장한 번호 <b>${saved.length}게임</b>을 전부(또는 고른 것만) 분석해서 <b>5게임</b>을 뽑아 드려요. 추첨이 끝나면 그 5게임 결과를 여기 맨 먼저 보여 드려요.</p>
-        <div class="toolbar"><button class="btn primary" data-asel="${r}">저장한 번호에서 5게임 분석</button><button class="btn small" data-fpick="${r}">직접 고르기</button></div></div>`;
-    else h += `<p class="hint">최종 5게임은 고르지 않았어요. 당첨번호가 들어오면 저장한 번호 ${saved.length}개의 결과를 보여 드려요.</p>`;
+    if (f) {
+      const sh = sheetsOf(f), left = remainOf(r).length, anyAna = sh.some(s => s.by === 'ana');
+      h += `<div class="fn-box" id="fnBox${r}"><div class="fn-title">최종 ${sh.length}장 · ${f.games.length}게임 · ${fmt(f.games.length * 1000)}원 <span class="pill good">저장됨</span></div>
+        ${open ? `<div class="toolbar"><button class="btn primary" data-anext="${r}"${left ? '' : ' disabled'}>다음 5게임 분석 (+5,000원)</button><span class="hint">${left ? `아직 안 고른 저장 번호 ${left}게임에서 다른 5게임을 뽑아요` : '저장한 번호를 다 골랐어요'}</span></div>` : ''}
+        ${sheetsHTML(r, f)}
+        <p class="hint">${before ? '추첨이 끝나면 이 게임들의 결과를 여기 맨 먼저 보여 드려요.' : '당첨번호가 들어오면 이 게임들의 결과를 여기 맨 먼저 보여 드려요.'}${anyAna ? ' 점수는 고르는 기준일 뿐이고, 어떤 조합이든 1등 확률은 같아요.' : ''}</p>
+        <div class="toolbar">${open ? `<button class="btn small" data-asel="${r}">골라서 다음 5게임</button><button class="btn small" data-fpick="${r}">직접 고르기</button>` : ''}<button class="btn small" data-fcopy="${r}">복사</button>${open && sh.length > 1 ? `<button class="btn small" data-fpop="${r}">마지막 장 빼기</button>` : ''}<button class="btn small" data-fdel="${r}">전부 지우기</button></div></div>`;
+    } else if (open) h += `<div class="fn-box"><p>제${r}회로 저장한 번호 <b>${saved.length}게임</b>을 분석해서 <b>5게임(5,000원)</b>을 뽑아 드려요. 더 사려면 「다음 5게임 분석」을 누를 때마다 남은 번호에서 <b>다른 5게임</b>이 한 장씩 더 나와요. 추첨이 끝나면 고른 게임 결과를 여기 맨 먼저 보여 드려요.</p>
+        <div class="toolbar"><button class="btn primary" data-anext="${r}">저장한 번호 전체에서 5게임 분석</button></div>
+        <div class="toolbar"><button class="btn small" data-asel="${r}">골라서 분석</button><button class="btn small" data-fpick="${r}">직접 고르기</button></div></div>`;
+    else h += `<p class="hint">최종 게임은 고르지 않았어요. 당첨번호가 들어오면 저장한 번호 ${saved.length}개의 결과를 보여 드려요.</p>`;
     return h;
   }
   function drawFinal() {
@@ -682,46 +698,70 @@ window.LottoSimple = function (A) {
     const el = $('#scFinal'); el.hidden = !parts.length; el.innerHTML = parts.join('');
   }
   function pickBar(r) {
-    const n = pickSel.size;
-    return `<div class="fn-bar"><b>최종 선택 ${n}/5</b>${P5 ? `<button class="btn small" data-fauto="${r}">추천 5개로 채우기</button>` : ''}<button class="btn small" data-fclear="1">비우기</button>
-      <span class="fn-bar-end"><button class="btn small" data-fcancel="1">취소</button><button class="btn primary" data-fsave="${r}" ${n ? '' : 'disabled'}>최종 ${n || 5}게임 저장</button></span></div>`;
+    const n = pickSel.size, k = sheetsOf(finalOf(r)).length + 1;
+    return `<div class="fn-bar"><b>${k}장째 직접 고르기 ${n}/5</b>${P5 ? `<button class="btn small" data-fauto="${r}">추천 5개로 채우기</button>` : ''}<button class="btn small" data-fclear="1">비우기</button>
+      <span class="fn-bar-end"><button class="btn small" data-fcancel="1">취소</button><button class="btn primary" data-fsave="${r}" ${n ? '' : 'disabled'}>${n || 5}게임을 ${k}장째로 저장</button></span></div>`;
+  }
+  function sheetsHTML(r, f, d) { // 장마다: 머리(몇 장 · 어떻게 골랐나 · 금액 [· 결과]) + A~E. 분석 설명은 가장 최근 장만 (스크롤 줄이기)
+    const all = sheetsOf(f), order = d ? all : all.slice().reverse(); // 추첨 전에는 최근 장을 맨 위에 (버튼 바로 아래)
+    return order.map(s => {
+      const j = all.indexOf(s);
+      const g = f.games.slice(s.start, s.start + s.n);
+      const tag = s.by === 'ana' ? `저장한 번호 ${s.from}게임에서 분석` : s.by === 'all' ? '남은 번호 그대로' : s.by === 'pick' ? '직접 고름' : '';
+      return `<div class="fn-sheet" id="fnS${r}_${j + 1}"><b>${j + 1}장</b><span class="hint">${tag ? `${tag} · ` : ''}${fmt(s.n * 1000)}원</span>${d ? sumPill(rankSummary(g, d)) : ''}</div>`
+        + g.map((n, i) => gameRow(n, GL[i], d) + (d || j < all.length - 1 ? '' : whyRow(f.info && f.info[s.start + i], i))).join('');
+    }).join('');
   }
   /* ---------- 저장한 번호에서 5게임 분석: 전체(또는 고른 것) 중에서 정밀 분석으로 5게임을 뽑아 최종으로 저장 ---------- */
   const whyRow = (x, i) => x ? `<div class="fn-why">${x.t != null ? `<span class="fn-score">${i + 1}위 · ${Number(x.t).toFixed(1)}점${x.a != null && Math.abs(x.a - x.t) > 0.05 ? ` <small>(앞 게임과 겹친 번호 감점 후 ${Number(x.a).toFixed(1)})</small>` : ''}</span>` : ''}<span class="fn-why-t">${(x.p || []).map(s => `<span class="plus-n">+ ${esc(s)}</span>`).join('')}${(x.w || []).map(s => `<span class="minus-n">− ${esc(s)}</span>`).join('')}</span></div>` : '';
-  const dayKeys = (r, date) => [...new Set(S.days.filter(d => d.round === r && d.date === date).flatMap(d => d.sets.flatMap(s => s.combos.map(key))))];
+  const dayKeys = (r, date) => { const pk = pickedKeys(r); return [...new Set(S.days.filter(d => d.round === r && d.date === date).flatMap(d => d.sets.flatMap(s => s.combos.map(key))))].filter(k => !pk.has(k)); };
   function anaBar(r) {
-    const all = roundCombos(r), n = all.filter(c => anaSel.has(key(c))).length;
-    const dates = [...new Set(S.days.filter(d => d.round === r).map(d => d.date))].sort();
-    return `<div class="fn-bar fn-abar"><b>선택 ${n}/${all.length}게임</b>
-      <div class="fn-adays"><button class="chip sc-day" data-aall="1">전체 선택</button><button class="chip sc-day" data-anone="1">전체 해제</button>${dates.map(ds => { const ks = dayKeys(r, ds), on = ks.length > 0 && ks.every(k => anaSel.has(k)); return `<button class="chip sc-day${on ? ' on' : ''}" data-aday="${ds}" aria-pressed="${on}">${dayLabel(ds)} · ${ks.length}</button>`; }).join('')}</div>
-      <span class="fn-bar-end"><button class="btn small" data-acancel="1">취소</button><button class="btn primary" data-arun="${r}" ${n ? '' : 'disabled'}>${n > 5 ? `${n}게임에서 5게임 분석` : `${n || 0}게임 그대로 저장`}</button></span></div>`;
+    const all = remainOf(r), n = all.filter(c => anaSel.has(key(c))).length, k = sheetsOf(finalOf(r)).length + 1;
+    const dates = [...new Set(S.days.filter(d => d.round === r).map(d => d.date))].sort().filter(ds => dayKeys(r, ds).length);
+    return `<div class="fn-bar fn-abar"><b>${k > 1 ? `${k}장째 · ` : ''}선택 ${n}/${all.length}게임</b>
+      <div class="fn-adays"><button class="chip sc-day" data-aall="1">전체 선택</button><button class="chip sc-day" data-anone="1">전체 해제</button>${dates.map(ds => { const ks = dayKeys(r, ds), on = ks.every(x => anaSel.has(x)); return `<button class="chip sc-day${on ? ' on' : ''}" data-aday="${ds}" aria-pressed="${on}">${dayLabel(ds)} · ${ks.length}</button>`; }).join('')}</div>
+      <span class="fn-bar-end"><button class="btn small" data-acancel="1">취소</button><button class="btn primary" data-arun="${r}" ${n ? '' : 'disabled'}>${n > 5 ? `${n}게임에서 5게임 분석` : `${n || 0}게임 그대로 넣기`}</button></span></div>`;
   }
-  function storeFinal(r, games, extra) {
-    const now = new Date();
-    S.finals = S.finals.filter(f => f.round !== r).concat(Object.assign({ round: r, games, at: `${ymd(now)} ${now.toTimeString().slice(0, 5)}` }, extra || {}));
+  function addSheet(r, games, info, meta) { // 최종에 한 장(최대 5게임)을 덧붙임 → 몇 장째인지 돌려줌
+    const now = new Date(), at = `${ymd(now)} ${now.toTimeString().slice(0, 5)}`, f = finalOf(r);
+    const prev = f ? f.games : [], prevInfo = prev.map((_, i) => (f && f.info && f.info[i]) || null);
+    const nf = { round: r, games: prev.concat(games), info: prevInfo.concat(info || games.map(() => null)), sheets: sheetsOf(f).map(bare).concat(Object.assign({ n: games.length, at }, meta)), at };
+    S.finals = S.finals.filter(x => x.round !== r).concat(nf);
     persist();
-    const acc = window.LottoAccount;
-    if (acc && acc.user && acc.notifyKo) acc.notifyKo(`🎱 제${r}회 최종 ${games.length}게임`, games.map((n, i) => `${GL[i]}  ${line(n)}`)).then(ok => { if (ok) toast('핸드폰으로 알림을 보냈어요'); });
+    const k = nf.sheets.length, acc = window.LottoAccount;
+    if (acc && acc.user && acc.notifyKo) acc.notifyKo(`🎱 제${r}회 ${k}장째 ${games.length}게임`, games.map((n, i) => `${GL[i]}  ${line(n)}`)).then(ok => { if (ok) toast('핸드폰으로 알림을 보냈어요'); });
+    return k;
   }
-  function runAnalysis(r) {
+  function popSheet(r) { // 마지막 장 빼기
+    const f = finalOf(r); if (!f) return;
+    const sh = sheetsOf(f), last = sh[sh.length - 1];
+    S.finals = S.finals.filter(x => x.round !== r);
+    if (sh.length > 1) S.finals.push({ round: r, games: f.games.slice(0, last.start), info: (f.info || []).slice(0, last.start), sheets: sh.slice(0, -1).map(bare), at: f.at });
+    persist();
+  }
+  function showSheet(r) { // 제목·버튼·방금 뽑은 장이 한 화면에 (위에 붙어 있는 머리 높이만큼 띄움)
+    requestAnimationFrame(() => { // 목록을 다시 그린 뒤에 위치를 재고 바로 이동 (부드러운 이동은 다시 그리는 중에 어긋남)
+      const el = $(`#fnBox${r}`) || $('#scFinal'); if (!el) return;
+      const hd = document.querySelector('header.top'), off = (hd && getComputedStyle(hd).position !== 'static' ? hd.getBoundingClientRect().bottom : 0) + 12;
+      window.scrollTo(0, Math.max(0, el.getBoundingClientRect().top + window.scrollY - off));
+    });
+  }
+  function analyzeAdd(r, list) { // list(아직 안 고른 저장 번호) 중에서 정밀 분석으로 5게임 → 다음 장
     if (!canPick(r)) { toast('판매가 마감된 회차라 바꿀 수 없어요'); anaR = null; anaSel.clear(); drawCheck(); return; }
-    const list = roundCombos(r).filter(n => anaSel.has(key(n))); if (!list.length) return;
-    const picks = pick5(list);
-    storeFinal(r, picks.map(p => p.n), list.length > 5 ? { by: 'ana', from: list.length, info: picks.map(p => ({ t: p.total, a: p.adj, p: (p.notes || []).slice(0, 2), w: (p.warns || []).slice(0, 2) })) } : null);
+    if (!list.length) { toast('아직 안 고른 저장 번호가 없어요. 번호 생성기에서 더 저장해 주세요'); return; }
+    const picks = pick5(list), ana = list.length > 5;
+    const k = addSheet(r, picks.map(p => p.n), ana ? picks.map(p => ({ t: p.total, a: p.adj, p: (p.notes || []).slice(0, 2), w: (p.warns || []).slice(0, 2) })) : null, { by: ana ? 'ana' : 'all', from: list.length });
     anaR = null; anaSel.clear(); drawCheck();
-    toast(list.length > 5 ? `${list.length}게임을 분석해서 5게임을 골랐어요` : `${list.length}게임을 그대로 최종으로 저장했어요`);
-    $('#scFinal').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    toast(ana ? `${list.length}게임을 분석해서 ${k}장째 5게임을 골랐어요` : `남은 ${list.length}게임을 ${k}장째로 넣었어요`);
+    showSheet(r, k);
   }
-  function saveFinal(r) {
+  function saveFinal(r) { // 직접 고른 게임을 다음 장으로
     if (!canPick(r)) { toast('판매가 마감된 회차라 최종 선택을 바꿀 수 없어요'); pickR = null; pickSel.clear(); drawCheck(); return; }
     const games = [...pickSel].map(k => k.split(',').map(Number)); if (!games.length) return;
-    const now = new Date();
-    S.finals = S.finals.filter(f => f.round !== r).concat({ round: r, games, at: `${ymd(now)} ${now.toTimeString().slice(0, 5)}` });
-    persist(); pickR = null; pickSel.clear(); drawCheck();
-    toast(`제${r}회 최종 ${games.length}게임을 저장했어요`);
-    const acc = window.LottoAccount;
-    if (acc && acc.user && acc.notifyKo) acc.notifyKo(`🎱 제${r}회 최종 ${games.length}게임`, games.map((n, i) => `${GL[i]}  ${line(n)}`)).then(ok => { if (ok) toast('핸드폰으로 알림을 보냈어요'); });
-    $('#scFinal').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const k = addSheet(r, games, null, { by: 'pick' });
+    pickR = null; pickSel.clear(); drawCheck();
+    toast(`제${r}회 ${k}장째 ${games.length}게임을 저장했어요`);
+    showSheet(r, k);
   }
 
   function drawCheck() {
@@ -734,16 +774,17 @@ window.LottoSimple = function (A) {
       const draw = BYR.get(r), days = S.days.filter(d => d.round === r).sort((a, b) => b.date.localeCompare(a.date));
       const total = days.reduce((a, d) => a + d.sets.reduce((x, s) => x + s.combos.length, 0), 0);
       const f = finalOf(r), fk = new Set(f ? f.games.map(key) : []), pk = pickR === r, an = anaR === r, picking = pk || an, sel = pk ? pickSel : anaSel;
+      const sheetOf = new Map(); sheetsOf(f).forEach((s, j) => f.games.slice(s.start, s.start + s.n).forEach(n => sheetOf.set(key(n), j + 1)));
       const sum = draw ? `<p class="hint">${f ? `최종 ${f.games.length}게임: ${rankSummary(f.games, draw).text || '당첨 없음'} · ` : ''}저장한 번호: ${rankSummary(roundCombos(r), draw).text || '당첨 없음'}</p>` : '';
       return `<div class="card${picking ? ' fn-picking' : ''}" id="scR${r}"><header><h3>제${r}회 ${r === NEXT ? '<span class="pill neutral">이번 주</span>' : ''}</h3><span class="hint">번호 ${total}개</span></header>
         ${draw ? `<div class="picked-row"><span class="lbl">당첨번호</span><span class="balls">${balls(draw.n, 'sm')}<span class="plus">+</span>${A.ball(draw.b, 'sm')}</span></div>` : ''}${sum}
-        ${!picking && canPick(r) ? `<div class="toolbar"><button class="btn${f ? ' small' : ' primary'}" data-asel="${r}">${f ? '다시 분석' : '5게임 분석'}</button><button class="btn small" data-fpick="${r}">직접 고르기</button></div>` : ''}
-        ${pk ? '<p class="hint">실제로 살 번호를 눌러서 고르세요. 최대 5게임까지 고를 수 있어요.</p>' : ''}
-        ${an ? '<p class="hint">분석할 게임을 고르세요. 처음엔 <b>전부 선택</b>돼 있어요. 빼고 싶은 게임만 눌러서 해제하거나, 아래 막대에서 요일별로 고를 수 있어요.</p>' : ''}
+        ${!picking && canPick(r) ? `<div class="toolbar"><button class="btn small primary" data-anext="${r}"${f && !remainOf(r).length ? ' disabled' : ''}>${f ? '다음 5게임 분석' : '5게임 분석'}</button><button class="btn small" data-asel="${r}">골라서 분석</button><button class="btn small" data-fpick="${r}">직접 고르기</button></div>` : ''}
+        ${pk ? `<p class="hint">실제로 살 번호를 눌러서 고르세요. 한 장에 5게임까지예요.${f ? ' 이미 고른 게임(「○장」 표시)은 빠져요.' : ''}</p>` : ''}
+        ${an ? `<p class="hint">분석할 게임을 고르세요. 처음엔 <b>전부 선택</b>돼 있어요. 빼고 싶은 게임만 눌러서 해제하거나, 아래 막대에서 요일별로 고를 수 있어요.${f ? ' 이미 고른 게임(「○장」 표시)은 빠져요.' : ''}</p>` : ''}
         ${days.map(d => `<div class="sc-set"><div class="sc-dayhead"><b>${dayLabel(d.date)}</b><button class="btn small" data-del="${r}|${d.date}">이 날 삭제</button></div>
           ${d.sets.map(s => s.combos.map((n, ci) => { if (scF !== 'all' && srcKey(s, ci) !== scF) return ''; const sc = SRC[(s.src || [])[ci]] || (/ 수동$/.test(s.t) ? SRC.m : SRC.a); const star = !s.re && s.picks.some(p => key(p) === key(n));
-            const k = key(n), on = picking && sel.has(k);
-            return `<div class="sg-trow${star ? ' star' : ''}${picking ? ' fn-pickable' + (on ? ' sel' : '') : ''}"${picking ? ` data-fk="${k}" role="checkbox" aria-checked="${on}" tabindex="0"` : ''}>${picking ? `<input type="checkbox" class="fn-cb" tabindex="-1" aria-hidden="true"${on ? ' checked' : ''}>` : ''}<span class="pill ${sc[1]}">${sc[0]}</span><span class="balls">${balls(n, 'sm', v => draw && draw.n.includes(v) ? 'ring' : '')}</span>${star ? '<span class="pill bad">추천 5</span>' : ''}${!picking && fk.has(k) ? '<span class="pill good">최종</span>' : ''}${resultBadge(n, r)}</div>`; }).join('')).join('')}
+            const k = key(n), can = picking && !fk.has(k), on = can && sel.has(k);
+            return `<div class="sg-trow${star ? ' star' : ''}${can ? ' fn-pickable' + (on ? ' sel' : '') : picking ? ' fn-used' : ''}"${can ? ` data-fk="${k}" role="checkbox" aria-checked="${on}" tabindex="0"` : ''}>${can ? `<input type="checkbox" class="fn-cb" tabindex="-1" aria-hidden="true"${on ? ' checked' : ''}>` : ''}<span class="pill ${sc[1]}">${sc[0]}</span><span class="balls">${balls(n, 'sm', v => draw && draw.n.includes(v) ? 'ring' : '')}</span>${star ? '<span class="pill bad">추천 5</span>' : ''}${fk.has(k) ? `<span class="pill good">${sheetOf.get(k)}장</span>` : ''}${resultBadge(n, r)}</div>`; }).join('')).join('')}
         </div>`).join('')}${pk ? pickBar(r) : an ? anaBar(r) : ''}</div>`;
     }).join('');
   }
@@ -754,10 +795,12 @@ window.LottoSimple = function (A) {
       else { del.dataset.armed = '1'; del.textContent = '한 번 더 누르면 삭제'; setTimeout(() => { if (del.isConnected) { delete del.dataset.armed; del.textContent = '이 날 삭제'; } }, 3000); }
       return;
     }
+    const nx = t.closest('[data-anext]');
+    if (nx) { const r = +nx.dataset.anext; pickR = null; pickSel.clear(); analyzeAdd(r, remainOf(r)); return; } // 한 번에: 아직 안 고른 저장 번호 전체에서 다음 5게임
     const as = t.closest('[data-asel]');
-    if (as) { // 분석할 게임 고르기 — 처음엔 그 회차 저장 번호 전체 선택
+    if (as) { // 분석할 게임 고르기 — 처음엔 아직 안 고른 저장 번호 전체 선택
       const r = +as.dataset.asel;
-      pickR = null; pickSel.clear(); anaR = r; anaSel.clear(); roundCombos(r).forEach(n => anaSel.add(key(n)));
+      pickR = null; pickSel.clear(); anaR = r; anaSel.clear(); remainOf(r).forEach(n => anaSel.add(key(n)));
       scF = 'all'; $$('#scFilter button').forEach(x => x.setAttribute('aria-pressed', x.dataset.f === 'all' ? 'true' : 'false'));
       drawCheck(); const c = $('#scR' + r); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'start' });
       return;
@@ -769,18 +812,18 @@ window.LottoSimple = function (A) {
         if (e.detail === 0) { const again = box.querySelector(`#scR${anaR} .sg-trow[data-fk="${k}"]`); if (again) again.focus(); }
         return;
       }
-      if (t.closest('[data-aall]')) { roundCombos(anaR).forEach(n => anaSel.add(key(n))); drawCheck(); return; }
+      if (t.closest('[data-aall]')) { remainOf(anaR).forEach(n => anaSel.add(key(n))); drawCheck(); return; }
       if (t.closest('[data-anone]')) { anaSel.clear(); drawCheck(); return; }
       const ad = t.closest('[data-aday]');
       if (ad) { const ks = dayKeys(anaR, ad.dataset.aday), allOn = ks.every(k => anaSel.has(k)); ks.forEach(k => allOn ? anaSel.delete(k) : anaSel.add(k)); drawCheck(); return; }
       if (t.closest('[data-acancel]')) { anaR = null; anaSel.clear(); drawCheck(); return; }
-      const ar = t.closest('[data-arun]'); if (ar) { runAnalysis(+ar.dataset.arun); return; }
+      const ar = t.closest('[data-arun]'); if (ar) { const r = +ar.dataset.arun; analyzeAdd(r, remainOf(r).filter(n => anaSel.has(key(n)))); return; }
     }
     const fp = t.closest('[data-fpick]');
     if (fp) {
-      const r = +fp.dataset.fpick, f = finalOf(r);
+      const r = +fp.dataset.fpick;
       anaR = null; anaSel.clear();
-      pickR = r; pickSel.clear(); if (f) f.games.forEach(n => pickSel.add(key(n)));
+      pickR = r; pickSel.clear(); // 다음 장을 직접 고름 (이미 고른 게임은 고를 수 없음)
       scF = 'all'; $$('#scFilter button').forEach(x => x.setAttribute('aria-pressed', x.dataset.f === 'all' ? 'true' : 'false'));
       drawCheck(); const c = $('#scR' + r); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'start' });
       return;
@@ -795,16 +838,22 @@ window.LottoSimple = function (A) {
       if (e.detail === 0) { const again = box.querySelector(`#scR${pickR} .sg-trow[data-fk="${k}"]`); if (again) again.focus(); } // 키보드로 고를 때 위치 유지
       return;
     }
-    if (t.closest('[data-fauto]')) { pickSel.clear(); pick5(roundCombos(pickR)).forEach(p => pickSel.add(key(p.n))); drawCheck(); toast('정밀 추천 5개로 채웠어요. 번호를 눌러 바꿀 수 있어요'); return; }
+    if (t.closest('[data-fauto]')) { pickSel.clear(); pick5(remainOf(pickR)).forEach(p => pickSel.add(key(p.n))); drawCheck(); toast('정밀 추천 5개로 채웠어요. 번호를 눌러 바꿀 수 있어요'); return; }
     if (t.closest('[data-fclear]')) { pickSel.clear(); drawCheck(); return; }
     if (t.closest('[data-fcancel]')) { pickR = null; pickSel.clear(); drawCheck(); return; }
     const sv = t.closest('[data-fsave]'); if (sv) { saveFinal(+sv.dataset.fsave); return; }
     const cp = t.closest('[data-fcopy]');
-    if (cp) { const f = finalOf(+cp.dataset.fcopy); if (f) copyText(`제${f.round}회 최종 ${f.games.length}게임\n` + f.games.map((n, i) => `${GL[i]}: ${line(n)}`).join('\n')); return; }
+    if (cp) { const f = finalOf(+cp.dataset.fcopy); if (f) copyText(`제${f.round}회 최종 ${f.games.length}게임 (${fmt(f.games.length * 1000)}원)\n` + sheetsOf(f).map((s, j) => `[${j + 1}장]\n` + f.games.slice(s.start, s.start + s.n).map((n, i) => `${GL[i]}: ${line(n)}`).join('\n')).join('\n')); return; }
+    const fpop = t.closest('button[data-fpop]');
+    if (fpop) {
+      if (fpop.dataset.armed) { popSheet(+fpop.dataset.fpop); drawCheck(); toast('마지막 장을 뺐어요'); }
+      else { fpop.dataset.armed = '1'; fpop.textContent = '한 번 더 누르면 빼요'; setTimeout(() => { if (fpop.isConnected) { delete fpop.dataset.armed; fpop.textContent = '마지막 장 빼기'; } }, 3000); }
+      return;
+    }
     const fd = t.closest('button[data-fdel]');
     if (fd) {
       if (fd.dataset.armed) { S.finals = S.finals.filter(f => f.round !== +fd.dataset.fdel); persist(); drawCheck(); }
-      else { fd.dataset.armed = '1'; fd.textContent = '한 번 더 누르면 지워요'; setTimeout(() => { if (fd.isConnected) { delete fd.dataset.armed; fd.textContent = '최종 선택 지우기'; } }, 3000); }
+      else { fd.dataset.armed = '1'; fd.textContent = '한 번 더 누르면 전부 지워요'; setTimeout(() => { if (fd.isConnected) { delete fd.dataset.armed; fd.textContent = '전부 지우기'; } }, 3000); }
     }
   });
   box.addEventListener('keydown', e => { const row = e.target.closest && e.target.closest('.sg-trow[data-fk]'); if (row && (e.key === ' ' || e.key === 'Enter')) { e.preventDefault(); row.click(); } });
@@ -822,7 +871,7 @@ window.LottoSimple = function (A) {
     const data = {
       v: 1,
       days: S.days.map(d => ({ d: d.date, r: d.round, s: d.sets.map(s => Object.assign({ t: s.t || '', c: s.combos.map(c12), o: (s.src || []).join(''), p: (s.picks || []).map(c12) }, s.re ? { e: 1 } : {})) })),
-      finals: S.finals.map(f => ({ r: f.round, g: f.games.map(c12), a: f.at || '' })),
+      finals: S.finals.map(f => ({ r: f.round, g: f.games.map(c12), a: f.at || '', s: sheetsOf(f).map(x => [x.n, x.by || '', x.from || 0]) })),
     };
     const bytes = new TextEncoder().encode(JSON.stringify(data));
     let bin = ''; for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
@@ -847,8 +896,10 @@ window.LottoSimple = function (A) {
       if (sets.length) days.push({ date: d.d, round: d.r, sets });
     }
     for (const f of data.finals) {
-      const games = f && Array.isArray(f.g) ? f.g.map(un12).filter(Boolean).slice(0, 5) : [];
-      if (f && Number.isInteger(f.r) && f.r > 0 && games.length) finals.push({ round: f.r, games, at: String(f.a || '') });
+      const games = f && Array.isArray(f.g) ? f.g.map(un12).filter(Boolean).slice(0, 100) : [];
+      const sh = f && Array.isArray(f.s) && f.s.every(x => Array.isArray(x) && Number.isInteger(x[0]) && x[0] > 0 && x[0] <= 5) && f.s.reduce((a, x) => a + x[0], 0) === games.length
+        ? f.s.map(x => ({ n: x[0], by: ['ana', 'all', 'pick'].includes(x[1]) ? x[1] : undefined, from: Number.isInteger(x[2]) && x[2] > 0 ? x[2] : undefined })) : null;
+      if (f && Number.isInteger(f.r) && f.r > 0 && games.length) finals.push(Object.assign({ round: f.r, games, at: String(f.a || '') }, sh ? { sheets: sh } : {}));
     }
     return { days, finals };
   }

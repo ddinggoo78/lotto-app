@@ -178,3 +178,9 @@ body.simple input[type=checkbox]{width:22px;height:22px;accent-color:var(--slip)
 .fn-abar{gap:6px 8px;padding:8px 10px}
 .fn-adays .sc-day{font-size:13px;padding:5px 10px;background:var(--surface)}
 .fn-adays .sc-day.on{background:var(--slip);border-color:var(--slip);color:#fff}
+
+/* ===== 2026-11-27 최종을 5게임(5,000원)씩 여러 장으로 ===== */
+.fn-sheet{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;padding:12px 0 4px;border-top:1px dashed var(--line)}
+.fn-sheet:first-of-type{border-top:0;padding-top:2px}
+.fn-sheet b{color:var(--slip);font-size:17px}
+.fn-used{opacity:.55}

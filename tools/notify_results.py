@@ -71,9 +71,13 @@ for doc in docs:
             for n in sset.get("combos", []):
                 k = tuple(sorted(n))
                 if k not in seen: seen.add(k); combos.append(list(k))
-    # 최종 5게임 (앱 「내 번호 조회」에서 고른 실제로 살 번호) — 있으면 맨 먼저
-    finals = next(([sorted(int(v) for v in g) for g in (fz.get("games") or []) if len(g) == 6]
-                   for fz in st.get("finals", []) if isinstance(fz, dict) and fz.get("round") == R), [])
+    # 최종 게임 (앱 「내 번호 조회」에서 5게임씩 장으로 고른 실제로 살 번호) — 있으면 맨 먼저
+    fz = next((x for x in st.get("finals", []) if isinstance(x, dict) and x.get("round") == R), None)
+    finals = [sorted(int(v) for v in g) for g in ((fz or {}).get("games") or []) if len(g) == 6]
+    sizes = [s.get("n") for s in ((fz or {}).get("sheets") or []) if isinstance(s, dict)]
+    if not sizes or any(not isinstance(x, int) or x < 1 for x in sizes) or sum(sizes) != len(finals):
+        sizes = [min(5, len(finals) - j) for j in range(0, len(finals), 5)]
+    labels = [(f"{j + 1}장 " if len(sizes) > 1 else "") + "ABCDE"[i] for j, s in enumerate(sizes) for i in range(s)]
     lines = [f"당첨번호 {' '.join(f'{v:02d}' for v in sorted(win))} + 보너스 {bonus:02d}"]
     best_all = 0
     if finals:
@@ -81,9 +85,11 @@ for doc in docs:
         fh = [rk for rk, _ in fr if rk]
         fbest = min(fh, default=0); best_all = fbest
         won = sum(prize[rk] for rk in fh)
-        lines.append(f"[최종 {len(finals)}게임] " + (f"최고 {fbest}등! ({len(fh)}게임 당첨 · {won:,}원)" if fbest else "이번엔 당첨 없음"))
+        head = f"[최종 {len(sizes)}장 · {len(finals)}게임]" if len(sizes) > 1 else f"[최종 {len(finals)}게임]"
+        lines.append(head + " " + (f"최고 {fbest}등! ({len(fh)}게임 당첨 · {won:,}원)" if fbest else "이번엔 당첨 없음"))
         for i, (n, (rk, m)) in enumerate(zip(finals, fr)):
-            lines.append(f"{'ABCDE'[i]}  {' '.join(f'{v:02d}' for v in n)}  {m}개 일치" + (f" · {rk}등" if rk else ""))
+            if len(finals) > 15 and not rk: continue  # 많이 샀으면 맞은 게임만
+            lines.append(f"{labels[i]}  {' '.join(f'{v:02d}' for v in n)}  {m}개 일치" + (f" · {rk}등" if rk else ""))
     if not combos:
         if not finals: lines.append("이번 회차에 저장한 번호가 없어요.")
     else:
