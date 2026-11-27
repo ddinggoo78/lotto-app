@@ -166,3 +166,15 @@ body.simple input[type=checkbox]{width:22px;height:22px;accent-color:var(--slip)
 .mv-step{margin:4px 0 0;font-size:16px}
 .mv-code{width:100%;box-sizing:border-box;min-width:0;font:12.5px/1.45 var(--f-mono);color:var(--ink);background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:8px 10px;resize:vertical;word-break:break-all}
 #mvMsg:empty{display:none}
+
+/* ===== 2026-11-27 저장한 번호에서 5게임 분석 (전체 선택 → 분석) ===== */
+.fn-why{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 10px;padding:0 0 8px 1.9em;font-size:13.5px;line-height:1.45}
+.fn-score{flex-basis:100%;font-weight:700;color:var(--slip)}
+.fn-score small{font-weight:500;color:var(--muted)}
+.fn-why-t{display:flex;flex-wrap:wrap;gap:2px 10px;min-width:0}
+.fn-why .plus-n{color:var(--good)}
+.fn-why .minus-n{color:var(--warn)}
+.fn-adays{display:flex;flex-wrap:wrap;gap:6px;flex-basis:100%}
+.fn-abar{gap:6px 8px;padding:8px 10px}
+.fn-adays .sc-day{font-size:13px;padding:5px 10px;background:var(--surface)}
+.fn-adays .sc-day.on{background:var(--slip);border-color:var(--slip);color:#fff}
