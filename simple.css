@@ -143,3 +143,26 @@ body.simple .rd-tbl{font-size:15.5px}
 }
 body.simple .ball{font-size:calc(var(--bs)*.5)}
 body.simple input[type=checkbox]{width:22px;height:22px;accent-color:var(--slip)}
+/* ===== 2026-11-25 최종 5게임 고르기 · 추첨 결과 먼저 보기 ===== */
+.fn-card{border:2px solid var(--slip)}
+.fn-head{display:flex;align-items:baseline;justify-content:space-between;gap:4px 10px;flex-wrap:wrap}
+.fn-head b{font-size:20px;color:var(--slip)}
+.fn-box{display:grid;border:1px solid var(--line);border-radius:10px;padding:8px 12px}
+.fn-title{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-weight:800;padding-bottom:6px}
+.fn-lbl{min-width:1.1em;color:var(--slip);font-weight:800}
+.fn-won{font-family:var(--f-mono);font-weight:700;color:var(--bad)}
+.fn-sep{border:0;border-top:2px dashed var(--line);margin:4px 0;width:100%}
+.fn-picking{border:2px solid var(--slip)}
+.fn-pickable{cursor:pointer;border-radius:8px;padding-left:6px;padding-right:6px}
+.fn-pickable:hover{background:var(--surface-2)}
+.fn-pickable.sel{background:var(--slip-soft);box-shadow:inset 0 0 0 2px var(--slip)}
+.fn-cb{width:22px;height:22px;margin:0;flex:none;accent-color:var(--slip);pointer-events:none}
+.fn-bar{position:sticky;bottom:calc(10px + env(safe-area-inset-bottom,0px));z-index:6;display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:8px;padding:10px 12px;background:var(--surface);border:2px solid var(--slip);border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,.18)}
+.fn-bar > b{font-size:17px;color:var(--slip)}
+.fn-bar-end{display:flex;gap:8px;margin-left:auto}
+
+/* ===== 2026-11-25 번호 옮기기 (다른 핸드폰·PC 프로그램과 저장한 번호 주고받기) ===== */
+.mv-card summary{cursor:pointer;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
+.mv-step{margin:4px 0 0;font-size:16px}
+.mv-code{width:100%;box-sizing:border-box;min-width:0;font:12.5px/1.45 var(--f-mono);color:var(--ink);background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:8px 10px;resize:vertical;word-break:break-all}
+#mvMsg:empty{display:none}

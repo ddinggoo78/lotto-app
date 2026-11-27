@@ -65,8 +65,27 @@ def 숫(v):
         return 0
 
 
+def 집계완료(행):
+    """추첨 직후에는 번호만 먼저 올라오고 등위별 당첨자 수·당첨금이 늦게 채워질 수 있다.
+    번호 7개, 2~5등 당첨자 수, 판매금액, (1등이 있으면) 1등 자동·수동·반자동 합계가 다 있어야 완료로 본다."""
+    if any(not 1 <= v <= 45 for v in 행[2:9]):
+        return False
+    if any(행[i] <= 0 for i in (11, 13, 15, 17, 19)):
+        return False
+    return 행[9] == 0 or 행[20] + 행[21] + 행[22] == 행[9]  # 262회부터 모든 회차가 이 합이 맞음
+
+
+def 최근추첨(날짜):
+    """추첨일로부터 이틀이 안 됐나 (그보다 오래된 회차는 옛 회차처럼 빈 칸이 있어도 그대로 저장)"""
+    try:
+        d = datetime.datetime.strptime(날짜, "%Y-%m-%d").date()
+    except Exception:
+        return False
+    return (datetime.datetime.now(KST).date() - d).days < 2
+
+
 def 회차받기(no):
-    """한 회차를 받아 23칸 행으로. 아직 추첨 전이면 None"""
+    """한 회차를 받아 23칸 행으로. 아직 추첨 전이거나, 추첨 직후라 집계가 덜 올라왔으면 None (10분 뒤 다시 받음)"""
     오류 = None
     for 시도 in range(2):
         try:
@@ -76,11 +95,15 @@ def 회차받기(no):
                 if 숫(x.get("ltEpsd")) == no:
                     ymd = str(x.get("ltRflYmd"))
                     nums = sorted(숫(x.get(f"tm{i}WnNo")) for i in range(1, 7))
-                    return [no, f"{ymd[:4]}-{ymd[4:6]}-{ymd[6:8]}"] + nums + [
+                    행 = [no, f"{ymd[:4]}-{ymd[4:6]}-{ymd[6:8]}"] + nums + [
                         숫(x.get("bnsWnNo")), 숫(x.get("rnk1WnNope")), 숫(x.get("rnk1WnAmt")), 숫(x.get("rnk2WnNope")),
                         숫(x.get("rnk2WnAmt")), 숫(x.get("rnk3WnNope")), 숫(x.get("rnk3WnAmt")), 숫(x.get("rnk4WnNope")),
                         숫(x.get("rnk4WnAmt")), 숫(x.get("rnk5WnNope")), 숫(x.get("rnk5WnAmt")),
                         숫(x.get("wholEpsdSumNtslAmt")), 숫(x.get("winType1")), 숫(x.get("winType2")), 숫(x.get("winType3"))]
+                    if not 집계완료(행) and 최근추첨(행[1]):
+                        기록(f"{no}회: 추첨은 끝났지만 당첨금 집계가 아직 다 올라오지 않아 다음에 다시 받습니다")
+                        return None
+                    return 행
             return None
         except Exception as e:  # 새 주소가 안 되면 옛 주소로
             오류 = e
